@@ -83,6 +83,16 @@ var cam: Camera3D
 var ship_body_mat: ShaderMaterial
 var ui: UiLayer
 
+# boss fight state
+var boss: BossGuardian = null
+var boss_bolts: Array = []
+var boss_bolt_pool: Array = []
+var fx_list: Array = []
+var pitch_ang := 0.0
+var pitch_unlocked := false
+var _victory_scheduled := false
+var _sm_arm := 0
+
 var _fwd := Vector3.ZERO
 var _to := Vector3.UP
 
@@ -492,6 +502,10 @@ func fire_bolt(dx: float, dz: float, opts: Dictionary = {}) -> void:
 		_to = heading(player.rotation.y)
 	else:
 		_to = _to.normalized()
+	_launch_bolt(_to, opts)
+
+
+func _launch_bolt(dir: Vector3, opts: Dictionary) -> void:
 	var speed: float = opts.get("speed", PROJECTILE_SPEED)
 	var bolt: MeshInstance3D = bolt_pool.pop_back() if bolt_pool.size() > 0 else null
 	if bolt == null:
@@ -507,13 +521,12 @@ func fire_bolt(dx: float, dz: float, opts: Dictionary = {}) -> void:
 		bolt.material_override = bm
 		add_child(bolt)
 	bolt.scale = Vector3.ONE * float(opts.get("scale", loadout.stats.area))
-	bolt.basis = Basis(Quaternion(Vector3.UP, _to))
-	bolt.position = player.position + _to * 2.2
+	bolt.basis = Basis(Quaternion(Vector3.UP, dir))
+	bolt.position = player.position + heading(player.rotation.y) * 2.2 + Vector3(0, 0.3, 0)
 	bolt.visible = true
 	projectiles.append({
 		"mesh": bolt,
-		"vx": _to.x * speed,
-		"vz": _to.z * speed,
+		"vel": dir * speed,
 		"life": float(opts.get("life", PROJECTILE_LIFE)),
 		"dmg": float(opts.get("dmg", 1.0)) * loadout.stats.damage,
 		"r2": HIT_R2 * loadout.stats.area,
@@ -572,6 +585,15 @@ func fire_weapon(w: Dictionary) -> void:
 	_fwd = heading(player.rotation.y)
 	match w.id:
 		"twin":
+			if boss != null and not boss.dead:
+				var part := best_part()
+				if not part.is_empty():
+					fire_bolt_at(part.pos, 1.0 + lv * 0.15)
+					if evo:
+						var side := Vector3(_fwd.z, 0.0, -_fwd.x) * 1.2
+						var dir2: Vector3 = ((part.pos as Vector3) + side) - player.position
+						_launch_bolt(dir2.normalized(), {"dmg": 1.0 + lv * 0.15})
+					return
 			var t := best_target(true)
 			if t == null:
 				return
@@ -579,6 +601,14 @@ func fire_weapon(w: Dictionary) -> void:
 			if evo:
 				fire_bolt(t.position.x - player.position.x + _fwd.z * 1.2, t.position.z - player.position.z - _fwd.x * 1.2, {"dmg": 1.0 + lv * 0.15})
 		"lock":
+			if boss != null and not boss.dead:
+				var n_p := 3 if evo else 1
+				for i in n_p:
+					var pt := best_part()
+					if pt.is_empty():
+						break
+					fire_bolt_at(pt.pos, 0.85 + lv * 0.12)
+				return
 			var n := 3 if evo else 1
 			var used: Array = []
 			for i in n:
@@ -618,10 +648,20 @@ func update_player(dt: float) -> void:
 	yaw_cmd = Input.get_axis("steer_left", "steer_right")
 	if _t_active:
 		yaw_cmd = _t_yaw
-	if Input.is_action_pressed("throttle_up"):
-		throttle += THROTTLE_RATE * dt
-	if Input.is_action_pressed("throttle_down"):
-		throttle -= THROTTLE_RATE * dt
+	if pitch_unlocked and boss != null and not boss.dead:
+		var axis := Input.get_axis("throttle_up", "throttle_down")
+		var pitch_cmd := -axis   # W = nose up
+		if _t_active:
+			pitch_cmd = -_t_pitch
+		pitch_ang = clampf(pitch_ang + pitch_cmd * 1.7 * dt, -0.85, 0.85)
+		throttle = lerpf(throttle, 0.55 + (0.3 if Input.is_action_pressed("boost") else 0.0), minf(1.0, dt * 2.5))
+	else:
+		pitch_ang = lerpf(pitch_ang, 0.0, minf(1.0, dt * 3.0))
+	if not (pitch_unlocked and boss != null and not boss.dead):
+		if Input.is_action_pressed("throttle_up"):
+			throttle += THROTTLE_RATE * dt
+		if Input.is_action_pressed("throttle_down"):
+			throttle -= THROTTLE_RATE * dt
 	if Input.is_action_just_pressed("cut_throttle"):
 		throttle = 0.0
 	throttle = clampf(throttle, 0.0, 1.0)
@@ -654,7 +694,8 @@ func update_player(dt: float) -> void:
 
 	var cruise: float = BASE_SPEED * throttle * loadout.stats.speed
 	var speed: float = BOOST_SPEED * maxf(throttle, 0.4) * loadout.stats.speed if boosting else cruise
-	_fwd = heading(player.rotation.y)
+	var cp := cos(pitch_ang)
+	_fwd = Vector3(sin(player.rotation.y) * cp, sin(pitch_ang), cos(player.rotation.y) * cp)
 	player.position += _fwd * speed * dt
 	confine_player(dt)
 
@@ -664,7 +705,7 @@ func update_player(dt: float) -> void:
 		player.rotation.z = bank + (1.0 - maxf(roll_t, 0.0) / ROLL_TIME) * TAU
 	else:
 		player.rotation.z = bank
-	player.rotation.x = lerpf(player.rotation.x, -throttle * 0.12, 1.0 - exp(-8.0 * dt))
+	player.rotation.x = -pitch_ang
 
 	engine_light.light_energy = 3.1 if boosting else 0.35 + throttle * 1.4
 	if ship_body_mat:
@@ -676,6 +717,12 @@ func update_player(dt: float) -> void:
 
 
 func confine_player(dt: float) -> void:
+	if boss != null and not boss.dead:
+		var bc := boss.global_position
+		player.position.x = clampf(player.position.x, bc.x - 190.0, bc.x + 190.0)
+		player.position.z = clampf(player.position.z, bc.z - 190.0, bc.z + 190.0)
+		player.position.y = clampf(player.position.y, -25.0, 45.0)
+		return
 	var h := ARENA / 2.0 - 6.0
 	var p := player.position
 	var hit := false
@@ -733,13 +780,30 @@ func update_projectiles(dt: float) -> void:
 	for i in range(projectiles.size() - 1, -1, -1):
 		var p: Dictionary = projectiles[i]
 		p.life -= dt
-		p.mesh.position.x += p.vx * dt
-		p.mesh.position.z += p.vz * dt
+		var m: MeshInstance3D = p.mesh
+		m.position += p.vel * dt
 		if p.life <= 0.0:
 			recycle_bolt(i)
 			continue
-		var bx: float = p.mesh.position.x
-		var bz: float = p.mesh.position.z
+		var consumed := false
+
+		if boss != null and not boss.dead:
+			for part in boss.part_positions():
+				var dv: Vector3 = m.position - (part.pos as Vector3)
+				if dv.length_squared() < float(part.radius) * float(part.radius):
+					boss.take_damage(part.kind, p.dmg)
+					spawn_flash(m.position, Color(1.0, 0.7, 0.3), 1.6)
+					recycle_bolt(i)
+					consumed = true
+					break
+		if consumed:
+			continue
+
+		var bx: float = m.position.x
+		var bz: float = m.position.z
+		var by: float = m.position.y
+		if absf(by) > 4.5:
+			continue
 		var dead := false
 		for j in range(enemies.size() - 1, -1, -1):
 			var rec: Dictionary = enemies[j]
@@ -890,11 +954,11 @@ func update_camera(dt: float) -> void:
 		coarse = DisplayServer.is_touchscreen_available()
 	var wide := portrait or coarse
 	cam.fov = 72.0 if wide else 55.0
-	var back := 13.5 if wide else 8.4
-	var up := 3.6 if wide else 2.35
+	var back := (17.5 if wide else 11.0) if boss != null and not boss.dead else (13.5 if wide else 8.4)
+	var up := (5.5 if wide else 4.0) if boss != null and not boss.dead else (3.6 if wide else 2.35)
 	_fwd = heading(player.rotation.y)
 	var target := player.position - _fwd * back
-	target.y = player.position.y + up
+	target.y = player.position.y + up + pitch_ang * back * 0.5
 	var t := 1.0 - exp(-10.0 * dt)
 	cam.position = cam.position.lerp(target, t)
 	shake_amt = maxf(0.0, shake_amt - dt * 1.6)
@@ -905,6 +969,9 @@ func update_camera(dt: float) -> void:
 			randf_range(-1, 1) * shake_amt)
 	var look := player.position + _fwd * 22.0
 	look.y = player.position.y + 0.35
+	if boss != null and not boss.dead:
+		var head_pos: Vector3 = boss.head_position()
+		look = look.lerp(head_pos, 0.45)
 	if (look - cam.position).length_squared() > 0.001:
 		cam.look_at(look)
 
@@ -932,6 +999,19 @@ func reset_run() -> void:
 	rolled_flag = false
 	hit_flag = false
 	ever_rolled = false
+	pitch_ang = 0.0
+	pitch_unlocked = false
+	_victory_scheduled = false
+	if boss != null:
+		boss.queue_free()
+		boss = null
+	for b in boss_bolts:
+		b.mesh.visible = false
+		boss_bolt_pool.append(b.mesh)
+	boss_bolts.clear()
+	for f in fx_list:
+		f.mesh.queue_free()
+	fx_list.clear()
 	player.position = Vector3.ZERO
 	player.rotation = Vector3.ZERO
 	while enemies.size() > 0:
@@ -1008,7 +1088,7 @@ func _process(delta: float) -> void:
 	if running and not selecting:
 		GameState.run.elapsed += dt
 		spawn_acc += dt
-		if spawn_acc > 0.4:
+		if spawn_acc > 0.4 and boss == null:
 			spawn_acc = 0.0
 			var want := desired_horde()
 			while enemies.size() < want:
@@ -1017,8 +1097,9 @@ func _process(delta: float) -> void:
 
 		if not boss_spawned and GameState.run.elapsed >= boss_time:
 			boss_spawned = true
-			spawn_enemy(true)
-			ui.say("vicar", "Ace on the Well. Mercy is jumping — finish this.")
+			_spawn_boss()
+		if boss != null:
+			boss.update(dt)
 
 		tick_weapons(dt)
 		update_player(dt)
@@ -1031,6 +1112,16 @@ func _process(delta: float) -> void:
 
 		if running and GameState.run.elapsed >= sector_end:
 			end_run(true)
+
+		update_boss_bolts(dt)
+		if boss != null and boss.dead and not _victory_scheduled:
+			_victory_scheduled = true
+			ui.say("vicar", "Guardian down. Mercy is clear — get out clean, Rook.")
+			var vt := get_tree().create_timer(1.4)
+			vt.timeout.connect(func() -> void:
+				if running:
+					end_run(true))
+		update_fx(dt)
 
 		player.visible = i_frames <= 0.0 or fmod(GameState.run.elapsed * 24.0, 2.0) < 1.0
 		if running:
@@ -1080,6 +1171,7 @@ var _t_py := 0.0
 var _t_start := 0
 var _t_last_tap := 0
 var _t_yaw := 0.0
+var _t_pitch := 0.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1095,10 +1187,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_t_py = _t_sy
 			_t_start = Time.get_ticks_msec()
 			_t_yaw = 0.0
+			_t_pitch = 0.0
 		else:
 			if not _t_active:
 				return
 			_t_active = false
+			_t_pitch = 0.0
 			var w := float(get_window().size.x)
 			var dx := _t_px - _t_sx
 			var dy := _t_py - _t_sy
@@ -1124,6 +1218,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var w := float(get_window().size.x)
 		_t_yaw = clampf((sd.relative.x / (w * 0.18)) * 2.2, -1.0, 1.0)
+		var hgt := float(get_window().size.y)
+		_t_pitch = clampf(_t_pitch + (sd.relative.y / (hgt * 0.18)) * 2.2, -1.0, 1.0)
 
 
 func _trigger_roll() -> void:
@@ -1133,6 +1229,134 @@ func _trigger_roll() -> void:
 		i_frames = maxf(i_frames, ROLL_TIME + 0.08)
 		rolled_flag = true
 		ever_rolled = true
+
+
+# ---------------- boss fight ----------------
+
+func _spawn_boss() -> void:
+	boss = BossGuardian.new()
+	add_child(boss)
+	boss.setup(self)
+	_fwd = heading(player.rotation.y)
+	boss.position = player.position + _fwd * 170.0
+	boss.position.y = 4.0
+	pitch_unlocked = true
+	throttle = 0.55
+	ui.say("vicar", "Guardian of the Well inbound. All-axis flight is yours — pitch is live on W and S.")
+	ui.say("hatch", "Monkey-bot has shielded core! Blast both arms first, kid — then the chest!")
+	ui.say("kite", "Finally, a real fight. Try not to die boring, Rook.")
+
+
+func boss_bolt(from: Vector3, dir: Vector3, speed: float) -> void:
+	var mesh: MeshInstance3D = boss_bolt_pool.pop_back() if boss_bolt_pool.size() > 0 else null
+	if mesh == null:
+		mesh = MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.09
+		cyl.bottom_radius = 0.09
+		cyl.height = 1.6
+		cyl.radial_segments = 4
+		mesh.mesh = cyl
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(1.0, 0.35, 0.2)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.22, 0.08)
+		m.emission_energy_multiplier = 1.6
+		mesh.material_override = m
+		add_child(mesh)
+	var d := dir.normalized()
+	mesh.basis = Basis(Quaternion(Vector3.UP, d))
+	mesh.position = from
+	mesh.visible = true
+	boss_bolts.append({"mesh": mesh, "vel": d * speed, "life": 6.0})
+
+
+func update_boss_bolts(dt: float) -> void:
+	for i in range(boss_bolts.size() - 1, -1, -1):
+		var b: Dictionary = boss_bolts[i]
+		b.life -= dt
+		var m: MeshInstance3D = b.mesh
+		m.position += b.vel * dt
+		if b.life <= 0.0 or m.position.y < -20.0:
+			m.visible = false
+			boss_bolt_pool.append(m)
+			boss_bolts[i] = boss_bolts[boss_bolts.size() - 1]
+			boss_bolts.pop_back()
+			continue
+		if i_frames <= 0.0 and not smoke_mode:
+			var dv := m.position - player.position
+			if dv.length_squared() < 10.5:
+				i_frames = I_FRAMES
+				damage_flash = 1.0
+				shake_amt = maxf(shake_amt, 0.35)
+				hit_flag = true
+				if GameState.damage():
+					end_run(false)
+					return
+
+
+func spawn_flash(pos: Vector3, col: Color, r: float) -> void:
+	var mesh := MeshInstance3D.new()
+	var s := SphereMesh.new()
+	s.radius = r
+	s.height = r * 2.0
+	s.radial_segments = 12
+	s.rings = 6
+	mesh.mesh = s
+	var m := StandardMaterial3D.new()
+	m.albedo_color = col
+	m.emission_enabled = true
+	m.emission = col
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color.a = 0.9
+	m.emission_energy_multiplier = 1.8
+	mesh.material_override = m
+	mesh.position = pos
+	add_child(mesh)
+	fx_list.append({"mesh": mesh, "t": 0.5, "max_t": 0.5})
+
+
+func update_fx(dt: float) -> void:
+	for i in range(fx_list.size() - 1, -1, -1):
+		var f: Dictionary = fx_list[i]
+		f.t -= dt
+		var m: MeshInstance3D = f.mesh
+		var k: float = f.t / f.max_t
+		m.scale = Vector3.ONE * (1.0 + (1.0 - k) * 1.6)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if false else m.transparency
+		var mat := m.material_override as StandardMaterial3D
+		if mat != null:
+			mat.albedo_color.a = k
+		if f.t <= 0.0:
+			m.queue_free()
+			fx_list.remove_at(i)
+
+
+func best_part() -> Dictionary:
+	if boss == null or boss.dead:
+		return {}
+	_fwd = heading(player.rotation.y)
+	var best := {}
+	var best_score := INF
+	for part in boss.part_positions():
+		var pos: Vector3 = part.pos
+		var dv := pos - player.position
+		var d2f := dv.x * dv.x + dv.z * dv.z
+		if d2f < 1.0:
+			continue
+		var d := sqrt(d2f)
+		var facing := (_fwd.x * dv.x + _fwd.z * dv.z) / d
+		var score := d * (0.45 if facing > 0.15 else 1.25)
+		if score < best_score:
+			best_score = score
+			best = part
+	return best
+
+
+func fire_bolt_at(target: Vector3, dmg: float) -> void:
+	var muzzle := player.position + heading(player.rotation.y) * 2.2 + Vector3(0, 0.3, 0)
+	var dir := (target - muzzle).normalized()
+	_launch_bolt(dir, {"dmg": dmg})
 
 
 # ---------------- smoke harness ----------------
@@ -1166,6 +1390,27 @@ func _smoke_checks() -> void:
 		if not _sm_evo_ok:
 			_fail("evolution label wrong")
 			return
+	if el >= boss_time + 1.5 and boss == null and not boss_spawned:
+		_fail("boss never spawned")
+		return
+	# deterministic Guardian kill: armL -> armR -> core exposed -> core dead
+	var sm_boss_ok := true
+	if boss != null and not boss.dead:
+		if el >= boss_time + 2.0 and _sm_arm == 0:
+			_sm_arm = 1
+			boss.take_damage("armL", 99999.0)
+			sm_boss_ok = boss.arms_alive == 1
+		elif el >= boss_time + 3.0 and _sm_arm == 1:
+			_sm_arm = 2
+			boss.take_damage("armR", 99999.0)
+			sm_boss_ok = boss.core_vulnerable
+		elif el >= boss_time + 4.0 and _sm_arm == 2:
+			_sm_arm = 3
+			boss.take_damage("core", 99999.0)
+			sm_boss_ok = boss.dead
+		if not sm_boss_ok:
+			_fail("boss damage chain broken at stage %d" % _sm_arm)
+			return
 	if el >= 30.0 or GameState.run.elapsed >= sector_end or not running:
 		if _sm_fired < 20:
 			_fail("weapons barely fired (%d)" % _sm_fired)
@@ -1175,6 +1420,12 @@ func _smoke_checks() -> void:
 			return
 		if smoke_mode and not boss_spawned:
 			_fail("boss never spawned by end of quick timeline")
+			return
+		if smoke_mode and _sm_arm < 3:
+			_fail("boss kill chain incomplete (stage %d)" % _sm_arm)
+			return
+		if smoke_mode and GameState.run.won != true:
+			_fail("run did not end in victory (boss phase)")
 			return
 		print("GAME SMOKE OK — fired=%d maxEnemies=%d lvl=%d kills=%d hp=%d evo=%s boss=%s won=%s" % [
 			_sm_fired, _sm_max_enemies, GameState.run.level, GameState.run.kills,

@@ -20,6 +20,7 @@ var stats_label: Label
 var hp_label: Label
 var radar: RadarView
 var throttle_view: ThrottleView
+var boss_bar: BossBarView
 var levelup_root: Control
 var cards_box: HBoxContainer
 var overlay_panel: PanelContainer
@@ -44,6 +45,7 @@ func _ready() -> void:
 	add_child(root)
 	_build_hud()
 	_build_radar()
+	_build_boss_bar()
 	_build_comms()
 	_build_levelup()
 	_build_overlay()
@@ -140,6 +142,20 @@ func _style_panel(p: PanelContainer, border := ACCENT) -> void:
 	sb.set_border_width_all(2)
 	sb.set_content_margin_all(10)
 	p.add_theme_stylebox_override("panel", sb)
+
+
+func _build_boss_bar() -> void:
+	boss_bar = BossBarView.new()
+	boss_bar.custom_minimum_size = Vector2(420, 30)
+	boss_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	boss_bar.anchor_left = 0.5
+	boss_bar.anchor_right = 0.5
+	boss_bar.offset_left = -210.0
+	boss_bar.offset_right = 210.0
+	boss_bar.offset_top = 14.0
+	boss_bar.offset_bottom = 44.0
+	boss_bar.visible = false
+	root.add_child(boss_bar)
 
 
 func _build_comms() -> void:
@@ -367,6 +383,12 @@ func poll(dt: float, main: Node) -> void:
 					bits.append("%s %d" % [def.name, p.level])
 			kit_label.text = "  ·  ".join(bits)
 			throttle_view.set_vals(main.throttle, main.boost_t > 0.0)
+		if main.boss != null and not main.boss.dead:
+			boss_bar.visible = true
+			boss_bar.snapshot(main.boss.bar_data())
+			boss_bar.queue_redraw()
+		else:
+			boss_bar.visible = false
 		_radar_acc += dt
 		if _radar_acc > 0.05:
 			_radar_acc = 0.0
@@ -546,6 +568,34 @@ class RadarView extends Control:
 			if cp.length_squared() > (center.x - 4.0) * (center.x - 4.0):
 				continue
 			draw_rect(Rect2(center + cp - Vector2(2, 2), Vector2(4, 4)), cols[c.kind])
+
+
+class BossBarView extends Control:
+	const GOLD := Color(0.94, 0.76, 0.29)
+	const RED := Color(1.0, 0.3, 0.2)
+	const GREEN := Color(0.3, 1.0, 0.6)
+	var _data := {}
+
+	func snapshot(d: Dictionary) -> void:
+		_data = d
+
+	func _draw() -> void:
+		if _data.is_empty():
+			return
+		var w := size.x
+		var seg := (w - 16.0) / 3.0
+		draw_rect(Rect2(0, 14, w, 12), Color(1, 1, 1, 0.08))
+		# segments: armL | core | armR
+		var core_col := GREEN if bool(_data.get("vulnerable", false)) else Color(0.45, 0.45, 0.5)
+		_seg(Rect2(0, 14, seg * float(_data.get("armL", 0.0)), 12), GOLD)
+		_seg(Rect2(seg + 8.0, 14, seg * float(_data.get("core", 0.0)), 12), core_col)
+		_seg(Rect2((seg + 8.0) * 2.0, 14, seg * float(_data.get("armR", 0.0)), 12), GOLD)
+		draw_string(ThemeDB.fallback_font, Vector2(w / 2.0 - 52, 10), "THE GUARDIAN",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.478, 0.627, 0.722))
+
+	func _seg(r: Rect2, col: Color) -> void:
+		if r.size.x > 0.5:
+			draw_rect(r, col)
 
 
 class BlobFace extends Control:

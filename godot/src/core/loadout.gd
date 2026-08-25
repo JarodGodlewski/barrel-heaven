@@ -6,7 +6,7 @@ const WEAPON_SLOTS := 4
 const PASSIVE_SLOTS := 4
 const WEAPON_MAX := 5
 
-const WEAPONS := {
+const WEAPONS: Dictionary[String, Dictionary] = {
 	"twin": {
 		"id": "twin", "name": "Twin Laser", "tag": "HARDPOINT",
 		"desc": "Paired cannons. Favors what's in front of you.",
@@ -45,7 +45,7 @@ const WEAPONS := {
 	},
 }
 
-const PASSIVES := {
+const PASSIVES: Dictionary[String, Dictionary] = {
 	"coolant": {
 		"id": "coolant", "name": "Coolant Loop", "tag": "SYSTEM",
 		"desc": "Hardpoints cycle faster.", "stat": "cooldown", "per": 0.12,
@@ -73,7 +73,7 @@ const PASSIVES := {
 }
 
 
-static func empty_loadout() -> Dictionary:
+static func empty_loadout() -> Dictionary[String, Variant]:
 	return {
 		"weapons": [{"id": "twin", "level": 1, "cd": 0.0, "evolved": false}],
 		"passives": [],
@@ -84,8 +84,8 @@ static func empty_loadout() -> Dictionary:
 	}
 
 
-static func recompute(loadout: Dictionary) -> Dictionary:
-	var s := {
+static func recompute(loadout: Dictionary) -> Dictionary[String, Variant]:
+	var s: Dictionary[String, Variant] = {
 		"cooldown": 1.0, "speed": 1.0, "damage": 1.0,
 		"area": 1.0, "magnet": 1.0, "hp_bonus": 0,
 	}

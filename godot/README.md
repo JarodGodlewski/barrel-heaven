@@ -3,15 +3,17 @@
 Star Fox all-range x Vampire Survivors horde. Birddog Softworks demo.
 
 Ported from the Three.js MVP in `../js/` (kept as design reference).
+Built on **Godot 4.7 stable** (GL Compatibility renderer).
 
 ## Quick start
 
-1. Open this folder in **Godot 4.3** (or run `tools/Godot_v4.3-stable_win64.exe`)
+1. Open this folder in **Godot 4.7** (or run `tools/Godot_v4.7-stable_win64.exe`)
 2. Import `project.godot`
-3. Main scene lands Week 2 — until then use the smoke test:
+3. Headless validation:
 
 ```
-tools\Godot_v4.3-stable_win64_console.exe --headless --path . --script res://tools/smoke_loadout.gd
+tools\Godot_v4.7-stable_win64_console.exe --headless --path . --script res://tools/smoke_loadout.gd
+tools\Godot_v4.7-stable_win64_console.exe --headless --path . -- --smoke
 ```
 
 ## Layout

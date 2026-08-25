@@ -57,6 +57,7 @@ func sfx(name: String, vol := 0.0, pitch := 1.0) -> void:
 # ---- run state ----
 var running := false
 var selecting := false
+var paused := false
 var smoke_mode := false
 var i_frames := 0.0
 var roll_t := 0.0
@@ -140,6 +141,8 @@ func _ready() -> void:
 		ui.hide_overlay()
 		reset_run())
 	ui.card_picked.connect(_on_card_picked)
+	ui.pause_pressed.connect(_on_pause_resume)
+	ui.quit_pressed.connect(_on_quit_to_title)
 	if smoke_mode:
 		reset_run()
 	else:
@@ -161,6 +164,17 @@ func _start_from_title() -> void:
 func _on_card_picked(i: int) -> void:
 	if selecting and i >= 0 and i < current_offers.size():
 		_apply_pick(current_offers[i])
+
+
+func _on_pause_resume() -> void:
+	paused = false
+	ui.hide_pause()
+
+
+func _on_quit_to_title() -> void:
+	running = false
+	ui.hide_pause()
+	ui.show_title()
 
 
 func _build_world() -> void:
@@ -1125,7 +1139,15 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 0.3 if smoke_mode else 0.05)
 	damage_flash = maxf(0.0, damage_flash - dt * 3.0)
 
-	if running and not selecting:
+	# Handle pause toggle
+	if Input.is_action_just_pressed("pause") and running and not selecting:
+		paused = not paused
+		if paused:
+			ui.show_pause()
+		else:
+			ui.hide_pause()
+
+	if running and not selecting and not paused:
 		GameState.run.elapsed += dt
 		spawn_acc += dt
 		if spawn_acc > 0.4 and boss == null:

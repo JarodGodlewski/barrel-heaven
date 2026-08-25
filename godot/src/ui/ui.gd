@@ -6,6 +6,8 @@ class_name UiLayer
 signal launch_pressed
 signal relaunch_pressed
 signal card_picked(index: int)
+signal pause_pressed
+signal quit_pressed
 
 const ACCENT := Color(0.243, 0.878, 0.765)   # #3ee0c3
 const WARN := Color(1.0, 0.42, 0.29)         # #ff6b4a
@@ -28,6 +30,7 @@ var overlay_title: Label
 var overlay_tag: Label
 var overlay_desc: Label
 var overlay_btn: Button
+var pause_panel: PanelContainer
 var comms_panel: Control
 var blob: BlobFace
 var name_label: Label
@@ -51,6 +54,7 @@ func _ready() -> void:
 	_build_comms()
 	_build_levelup()
 	_build_overlay()
+	_build_pause()
 
 
 # ---------------- build ----------------
@@ -316,6 +320,87 @@ func _build_overlay() -> void:
 		else:
 			relaunch_pressed.emit()
 	)
+
+
+func _build_pause() -> void:
+	pause_panel = PanelContainer.new()
+	pause_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var dim := Color(0.008, 0.02, 0.04, 0.85)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = dim
+	bg.set_content_margin_all(28)
+	bg.border_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.3)
+	bg.set_border_width_all(1)
+	bg.set_corner_radius_all(16)
+	pause_panel.add_theme_stylebox_override("panel", bg)
+	root.add_child(pause_panel)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_panel.add_child(center)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_child(v)
+
+	var title := _label(v, 24, INK)
+	title.text = "PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	var resume_btn := Button.new()
+	resume_btn.text = "RESUME"
+	resume_btn.custom_minimum_size = Vector2(200, 48)
+	resume_btn.add_theme_font_size_override("font_size", 16)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = ACCENT
+	sb.set_corner_radius_all(999)
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	resume_btn.add_theme_stylebox_override("normal", sb)
+	var sbp := sb.duplicate()
+	sbp.bg_color = sb.bg_color.darkened(0.15)
+	resume_btn.add_theme_stylebox_override("hover", sb.duplicate())
+	resume_btn.add_theme_stylebox_override("pressed", sbp)
+	resume_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var bc := CenterContainer.new()
+	v.add_child(bc)
+	bc.add_child(resume_btn)
+	resume_btn.pressed.connect(func() -> void:
+		pause_pressed.emit()
+	)
+
+	var quit_btn := Button.new()
+	quit_btn.text = "QUIT TO TITLE"
+	quit_btn.custom_minimum_size = Vector2(200, 48)
+	quit_btn.add_theme_font_size_override("font_size", 16)
+	var sb2 := StyleBoxFlat.new()
+	sb2.bg_color = Color(0.6, 0.2, 0.2)
+	sb2.set_corner_radius_all(999)
+	sb2.content_margin_top = 12
+	sb2.content_margin_bottom = 12
+	quit_btn.add_theme_stylebox_override("normal", sb2)
+	var sb2p := sb2.duplicate()
+	sb2p.bg_color = sb2.bg_color.darkened(0.15)
+	quit_btn.add_theme_stylebox_override("hover", sb2.duplicate())
+	quit_btn.add_theme_stylebox_override("pressed", sb2p)
+	quit_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var bc2 := CenterContainer.new()
+	v.add_child(bc2)
+	bc2.add_child(quit_btn)
+	quit_btn.pressed.connect(func() -> void:
+		quit_pressed.emit()
+	)
+
+	pause_panel.visible = false
+
+
+func show_pause() -> void:
+	pause_panel.visible = true
+
+
+func hide_pause() -> void:
+	pause_panel.visible = false
 
 
 # ---------------- state api ----------------

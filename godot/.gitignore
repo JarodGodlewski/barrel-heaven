@@ -1,0 +1,23 @@
+# Godot 4+
+.godot/
+*.translation
+export.cfg
+export_presets.cfg.bak
+
+# Exports
+export/
+*.apk
+*.aab
+*.ipa
+*.exe
+*.x86_64
+*.pck
+*.zip
+
+# Tools (engine binary lives here, do not commit)
+tools/Godot_v*.exe
+tools/Godot_v*_console.exe
+
+# OS junk
+Thumbs.db
+Desktop.ini

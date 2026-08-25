@@ -48,7 +48,6 @@ func _ready() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	# Ensure UI renders on top of 3D scene
 	layer = 10
 	_build_hud()
 	_build_radar()

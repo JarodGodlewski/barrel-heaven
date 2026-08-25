@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_back, specular_disabled;
+render_mode cull_disabled, specular_disabled;
 
 // Barrel Heaven player ship — palette mask via per-material uniform.
 // u_mask channels: R = engine/emissive zone, G = secondary paint, B = trim.

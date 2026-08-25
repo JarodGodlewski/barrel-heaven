@@ -28,6 +28,7 @@ const ENEMY_SHADER := preload("res://assets/shaders/enemy.gdshader")
 const BOLT_SHADER := preload("res://assets/shaders/bolt.gdshader")
 const GRID_SHADER := preload("res://assets/shaders/grid.gdshader")
 const SKY_SHADER := preload("res://assets/shaders/bg_sky.gdshader")
+const UI_LAYER := preload("res://src/ui/ui.gd")
 
 # ---- run state ----
 var running := false
@@ -42,6 +43,10 @@ var u_turn := 0.0
 var u_turn_from := 0.0
 var yaw_cmd := 0.0
 var damage_flash := 0.0
+var shake_amt := 0.0
+var rolled_flag := false
+var hit_flag := false
+var ever_rolled := false
 var _kb_last_tap := 0
 var _kb_last_dir := 0
 var spawn_acc := 0.0
@@ -49,7 +54,6 @@ var hud_acc := 0.0
 var boss_spawned := false
 var restart_pending := false
 var current_offers: Array = []
-var offer_timer := 0.0
 
 # smoke counters
 var _sm_fired := 0
@@ -77,6 +81,7 @@ var player: Node3D
 var engine_light: OmniLight3D
 var cam: Camera3D
 var ship_body_mat: ShaderMaterial
+var ui: UiLayer
 
 var _fwd := Vector3.ZERO
 var _to := Vector3.UP
@@ -94,7 +99,34 @@ func _ready() -> void:
 	player = _build_player_ship()
 	add_child(player)
 	GameState.level_up.connect(_on_level_up_signal)
+	ui = UiLayer.new()
+	add_child(ui)
+	ui.launch_pressed.connect(_start_from_title)
+	ui.relaunch_pressed.connect(func() -> void:
+		ui.hide_overlay()
+		reset_run())
+	ui.card_picked.connect(_on_card_picked)
+	if smoke_mode:
+		reset_run()
+	else:
+		running = false
+		ui.show_title()
+
+
+func GameState_run() -> Dictionary:
+	return GameState.run
+
+
+func _start_from_title() -> void:
+	if running:
+		return
+	ui.hide_overlay()
 	reset_run()
+
+
+func _on_card_picked(i: int) -> void:
+	if selecting and i >= 0 and i < current_offers.size():
+		_apply_pick(current_offers[i])
 
 
 func _build_world() -> void:
@@ -687,6 +719,8 @@ func update_enemies(dt: float) -> void:
 		var hit_r := 16.0 if rec.boss else 3.24
 		if d2 < hit_r and i_frames <= 0.0 and not smoke_mode:
 			damage_flash = 1.0
+			shake_amt = 0.4
+			hit_flag = true
 			if GameState.damage():
 				end_run(false)
 				return
@@ -766,7 +800,7 @@ func update_pods(dt: float) -> void:
 			var ready_id := LoadoutLib.first_evolvable(loadout)
 			if ready_id != "":
 				LoadoutLib.evolve(loadout, ready_id)
-				print("[comms] %s online." % LoadoutLib.WEAPONS[ready_id].evo_name)
+				ui.say_once("evo-" + ready_id, "pip", "%s online. Don't waste it." % LoadoutLib.WEAPONS[ready_id].evo_name)
 			else:
 				GameState.add_xp(14)
 			_despawn(pods, i, pod_pool)
@@ -804,7 +838,7 @@ func collect_cache(c: Dictionary) -> void:
 	match c.kind:
 		"patch":
 			GameState.heal(2)
-			print("[comms] Patch kit. Two plates sealed.")
+			ui.say_once("cache-patch", "pip", "Patch kit. Two plates sealed. Don't spend them twice.")
 		"vac":
 			var n := gems.size()
 			for g in gems:
@@ -813,7 +847,7 @@ func collect_cache(c: Dictionary) -> void:
 			gems.clear()
 			if n > 0:
 				GameState.add_xp(n)
-			print("[comms] Scoop's full. That's a lot of light.")
+			ui.say_once("cache-vac", "pip", "Scoop's full. That's a lot of light." if n > 0 else "Scoop's dry. Kill something first.")
 		"flare":
 			var cleared := 0
 			for i in range(enemies.size() - 1, -1, -1):
@@ -821,7 +855,10 @@ func collect_cache(c: Dictionary) -> void:
 					continue
 				recycle_enemy(enemies[i])
 				cleared += 1
-			print("[comms] Flare out. I can see again." if cleared > 0 else "[comms] You wasted a flare on empty sky.")
+			if cleared > 0:
+				ui.say_once("cache-flare", "juno", "Flare out. I can see again.", 4.1)
+			else:
+				ui.say_once("cache-flare-dry", "juno", "You wasted a flare on empty sky.", 4.1)
 
 
 func update_orbiters(dt: float) -> void:
@@ -860,6 +897,12 @@ func update_camera(dt: float) -> void:
 	target.y = player.position.y + up
 	var t := 1.0 - exp(-10.0 * dt)
 	cam.position = cam.position.lerp(target, t)
+	shake_amt = maxf(0.0, shake_amt - dt * 1.6)
+	if shake_amt > 0.001:
+		cam.position += Vector3(
+			randf_range(-1, 1) * shake_amt,
+			randf_range(-1, 1) * shake_amt * 0.6,
+			randf_range(-1, 1) * shake_amt)
 	var look := player.position + _fwd * 22.0
 	look.y = player.position.y + 0.35
 	if (look - cam.position).length_squared() > 0.001:
@@ -875,7 +918,6 @@ func reset_run() -> void:
 	LoadoutLib.recompute(loadout)
 	running = true
 	selecting = false
-	restart_pending = false
 	boss_spawned = false
 	i_frames = 1.2
 	roll_t = 0.0
@@ -884,8 +926,12 @@ func reset_run() -> void:
 	throttle = 0.35
 	boost_t = 0.0
 	damage_flash = 0.0
+	shake_amt = 0.0
 	spawn_acc = 0.0
 	current_offers = []
+	rolled_flag = false
+	hit_flag = false
+	ever_rolled = false
 	player.position = Vector3.ZERO
 	player.rotation = Vector3.ZERO
 	while enemies.size() > 0:
@@ -909,35 +955,32 @@ func reset_run() -> void:
 	spawn_field_caches()
 	for i in START_HORDE:
 		spawn_enemy()
-	print("[mission] All-range, Rook. Hold the Well until Mercy finishes her jump.")
+	ui.start_mission()
 
 
 func end_run(won: bool) -> void:
 	running = false
-	restart_pending = true
-	GameState.run.elapsed = GameState.run.elapsed
+	selecting = false
+	ui.close_offers()
 	GameState.end_run(won)
+	ui.show_result(won, GameState.run.level, GameState.run.kills, int(GameState.run.elapsed))
 	if won:
 		print("[mission] MERCY IS AWAY — Lv %d · %d kills · %ds" % [GameState.run.level, GameState.run.kills, int(GameState.run.elapsed)])
 	else:
+		ui.comms_triggers({"dead": true})
 		print("[mission] HULL LOST — Lv %d · %d kills · %ds" % [GameState.run.level, GameState.run.kills, int(GameState.run.elapsed)])
-	var t := get_tree().create_timer(2.5)
-	t.timeout.connect(func() -> void:
-		if restart_pending:
-			reset_run()
-	)
 
 
 func _on_level_up_signal(_pending: int) -> void:
 	pass  # handled in _process gate
 
 
-func _resolve_levelups(dt: float) -> void:
+func _resolve_levelups() -> void:
 	if selecting or GameState.run.pending_levels <= 0:
 		return
 	selecting = true
 	current_offers = LoadoutLib.offer_three(loadout)
-	offer_timer = 0.0 if smoke_mode else 0.8
+	ui.open_offers(current_offers)
 
 
 func _apply_pick(choice: Dictionary) -> void:
@@ -946,12 +989,14 @@ func _apply_pick(choice: Dictionary) -> void:
 	GameState.run.max_hp = GameState.MAX_HP + int(loadout.stats.hp_bonus)
 	if heals:
 		GameState.heal(1)
-	selecting = GameState.run.pending_levels > 0
-	if selecting:
+	print("[levelup] picked: %s (%s)" % [choice.label, choice.kind])
+	if GameState.run.pending_levels > 0:
 		current_offers = LoadoutLib.offer_three(loadout)
-		offer_timer = 0.0 if smoke_mode else 0.8
+		ui.open_offers(current_offers)
 	else:
 		current_offers = []
+		ui.close_offers()
+		selecting = false
 
 
 # ---------------- main loop ----------------
@@ -973,7 +1018,7 @@ func _process(delta: float) -> void:
 		if not boss_spawned and GameState.run.elapsed >= boss_time:
 			boss_spawned = true
 			spawn_enemy(true)
-			print("[comms] Ace on the Well. Mercy is jumping — finish this.")
+			ui.say("vicar", "Ace on the Well. Mercy is jumping — finish this.")
 
 		tick_weapons(dt)
 		update_player(dt)
@@ -989,18 +1034,37 @@ func _process(delta: float) -> void:
 
 		player.visible = i_frames <= 0.0 or fmod(GameState.run.elapsed * 24.0, 2.0) < 1.0
 		if running:
-			_resolve_levelups(dt)
+			_resolve_levelups()
 	else:
 		player.rotation.y += dt * 0.25
 
-	if selecting and current_offers.size() > 0:
-		offer_timer -= dt
-		if offer_timer <= 0.0:
-			var pick: Dictionary = current_offers[randi() % current_offers.size()]
-			print("[levelup] auto-pick: %s (%s)" % [pick.label, pick.kind])
-			_apply_pick(pick)
+	if selecting:
+		for i in 3:
+			if Input.is_action_just_pressed("pick_card_%d" % (i + 1)) and i < current_offers.size():
+				_apply_pick(current_offers[i])
+				break
+
+	if smoke_mode and selecting and current_offers.size() > 0:
+		var pick: Dictionary = current_offers[randi() % current_offers.size()]
+		print("[levelup] auto-pick: %s (%s)" % [pick.label, pick.kind])
+		_apply_pick(pick)
 
 	update_camera(dt if running and not selecting else dt * 0.6)
+
+	if not GameState.run.is_empty():
+		ui.comms_triggers({
+			"elapsed": GameState.run.get("elapsed", 0.0),
+			"wave": 1 + int(GameState.run.get("elapsed", 0.0) / 18.0),
+			"kills": GameState.run.get("kills", 0),
+			"hp": GameState.run.get("hp", GameState.MAX_HP),
+			"just_rolled": rolled_flag,
+			"just_hit": hit_flag,
+			"ever_rolled": ever_rolled,
+			"dead": false,
+		})
+	rolled_flag = false
+	hit_flag = false
+	ui.poll(dt, self)
 	_smoke_checks()
 
 
@@ -1067,6 +1131,8 @@ func _trigger_roll() -> void:
 		roll_t = ROLL_TIME
 		roll_cd = ROLL_COOLDOWN + ROLL_TIME
 		i_frames = maxf(i_frames, ROLL_TIME + 0.08)
+		rolled_flag = true
+		ever_rolled = true
 
 
 # ---------------- smoke harness ----------------

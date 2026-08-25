@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  headless-test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ./godot
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Godot 4.3 console
+        run: |
+          $url = "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip"
+          $zip = "$env:TEMP\godot43.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath ./tools -Force
+          ls ./tools
+
+      - name: Import project
+        run: |
+          & ./tools/Godot_v4.3-stable_win64_console.exe --headless --path . --import
+
+      - name: Loadout smoke test (13 checks)
+        run: |
+          & ./tools/Godot_v4.3-stable_win64_console.exe --headless --path . --script res://tools/smoke_loadout.gd
+
+      - name: Game smoke test (combat sim, boss, evolution)
+        run: |
+          & ./tools/Godot_v4.3-stable_win64_console.exe --headless --path . -- --smoke

@@ -22,17 +22,20 @@ func _ready() -> void:
 
 
 func reset_meta() -> void:
-	meta = Storage.load_section("meta")
-	if meta.is_empty():
-		meta = {
-			"version": 1,
-			"runs": 0,
-			"wins": 0,
-			"best_time": 0.0,
-			"best_kills": 0,
-			# v1.1 stubs — do not build yet:
-			# "ships": {}, "upgrades": {}, "credits": 0,
-		}
+	var fresh := {
+		"version": 1,
+		"runs": 0,
+		"wins": 0,
+		"best_time": 0.0,
+		"best_kills": 0,
+		# v1.1 stubs — do not build yet:
+		# "ships": {}, "upgrades": {}, "credits": 0,
+	}
+	var saved := Storage.load_section("meta")
+	for k in fresh:
+		if saved.has(k):
+			fresh[k] = saved[k]
+	meta = fresh
 
 
 func new_run() -> void:

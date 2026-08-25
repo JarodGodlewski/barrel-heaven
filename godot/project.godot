@@ -9,7 +9,7 @@ config_version=5
 config/name="Barrel Heaven"
 config/description="Star Fox all-range x Vampire Survivors horde. A Birddog Softworks demo."
 config/version="0.1.0"
-run/main_scene="res://scenes/Boot.tscn"
+run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 config/icon="res://icon.svg"
 

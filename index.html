@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%233ee0c3' d='M8 1 L15 14 H1 Z'/></svg>" />
+    <title>Barrel Heaven</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="hud">
+      <div id="brand">
+        <span class="title">BARREL HEAVEN</span>
+        <span class="sub">all-range · bullet heaven</span>
+      </div>
+      <div id="stats">
+        <div><span class="k">HULL</span> <span id="hp">█████</span></div>
+        <div><span class="k">KILLS</span> <span id="kills">0</span></div>
+        <div><span class="k">WAVE</span> <span id="wave">1</span></div>
+        <div><span class="k">TIME</span> <span id="time">0:00</span></div>
+        <div><span class="k">LV</span> <span id="lvl">1</span></div>
+      </div>
+    </div>
+    <div id="xp-bar"><div id="xp-fill"></div></div>
+    <div id="kit"></div>
+
+    <div id="comms" class="comms" hidden>
+      <div class="comms-cam">
+        <div class="comms-scan"></div>
+        <canvas id="comms-blob" class="comms-face" width="152" height="152"></canvas>
+        <span class="comms-live">CAM</span>
+      </div>
+      <div class="comms-copy">
+        <div class="comms-meta">
+          <span id="comms-name">HATCH</span>
+          <span id="comms-ch">CH-04</span>
+        </div>
+        <p id="comms-line"></p>
+      </div>
+    </div>
+
+    <div id="radar"><canvas id="radar-canvas" width="128" height="128"></canvas></div>
+    <div id="throttle" aria-label="Throttle">
+      <div id="thr-fill"></div>
+      <span id="thr-pct">0</span>
+    </div>
+
+    <div id="hint">
+      <span class="desk">A/D steer · W/S throttle · Shift boost · X stop · Space roll</span>
+      <span class="mob">drag steer · flick up boost · flick down U-turn · flick side roll · double-tap stop</span>
+    </div>
+
+    <div id="levelup">
+      <div class="levelup-panel">
+        <p class="tag">SYSTEM UPGRADE</p>
+        <h2>Pick a hardpoint</h2>
+        <div id="levelup-cards"></div>
+        <p class="fine desk">1 / 2 / 3 to choose</p>
+      </div>
+    </div>
+
+    <div id="overlay" class="show">
+      <div class="panel">
+        <h1>BARREL HEAVEN</h1>
+        <p class="tag">Star Fox all-range × Vampire Survivors horde</p>
+        <p>
+          Hold the Well until Mercy jumps. Your wing will be on comms.
+          Weapons fire themselves — you steer and barrel-roll.
+        </p>
+        <button id="start-btn" type="button">LAUNCH</button>
+        <p class="fine">Geometric prototype · no engine · no imported art</p>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

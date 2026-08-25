@@ -168,6 +168,8 @@ func take_damage(kind: String, dmg: float) -> void:
 			p.node.get_parent().remove_child(p.node)   # stop hit detection
 			main.spawn_flash(flash_pos, Color(1.0, 0.5, 0.1), 14.0)
 			main.shake_amt = maxf(main.shake_amt, 0.8)
+			main.sfx("bigexplode", -3.0)
+			main.sfx("slam", -8.0)
 			match kind:
 				"armL":
 					main.ui.say_once("armL-down", "juno", "Left arm's off! It's furious!", 3.4)
@@ -179,6 +181,7 @@ func take_damage(kind: String, dmg: float) -> void:
 				disc.emission = Color(0.2, 1.0, 0.5)
 				disc.albedo_color = Color(0.2, 1.0, 0.5)
 				main.ui.say_once("core-open", "vicar", "Shield is down. Kill the core, Rook.")
+				main.sfx("alarm", -5.0)
 
 
 func die() -> void:
@@ -188,6 +191,8 @@ func die() -> void:
 	main.spawn_flash(global_position + Vector3(0, 6, 0), Color(1.0, 0.85, 0.3), 40.0)
 	main.spawn_flash(global_position + Vector3(0, 12, 0), Color(1.0, 0.4, 0.1), 26.0)
 	main.shake_amt = 1.4
+	main.sfx("bigexplode", 0.0)
+	main.sfx("slam", -3.0)
 	visible = false
 
 
@@ -355,6 +360,7 @@ func _slam_ring() -> void:
 	mesh.position = core_pos()
 	main.add_child(mesh)
 	rings.append({"mesh": mesh, "r": 6.0, "speed": 42.0})
+	main.sfx("slam", -6.0)
 
 
 func _update_rings(dt: float) -> void:

@@ -30,6 +30,30 @@ const GRID_SHADER := preload("res://assets/shaders/grid.gdshader")
 const SKY_SHADER := preload("res://assets/shaders/bg_sky.gdshader")
 const UI_LAYER := preload("res://src/ui/ui.gd")
 
+const MUS_COMBAT := preload("res://assets/audio/music_combat.wav")
+const MUS_BOSS := preload("res://assets/audio/music_boss.wav")
+const SFX := {
+	"laser": preload("res://assets/audio/sfx_laser.wav"),
+	"explode": preload("res://assets/audio/sfx_explode.wav"),
+	"bigexplode": preload("res://assets/audio/sfx_bigexplode.wav"),
+	"hurt": preload("res://assets/audio/sfx_hurt.wav"),
+	"gem": preload("res://assets/audio/sfx_gem.wav"),
+	"levelup": preload("res://assets/audio/sfx_levelup.wav"),
+	"pick": preload("res://assets/audio/sfx_pick.wav"),
+	"roll": preload("res://assets/audio/sfx_roll.wav"),
+	"boost": preload("res://assets/audio/sfx_boost.wav"),
+	"slam": preload("res://assets/audio/sfx_slam.wav"),
+	"alarm": preload("res://assets/audio/sfx_alarm.wav"),
+	"win": preload("res://assets/audio/sfx_win.wav"),
+	"lose": preload("res://assets/audio/sfx_lose.wav"),
+}
+
+
+func sfx(name: String, vol := 0.0, pitch := 1.0) -> void:
+	var st: AudioStream = SFX.get(name)
+	if st != null:
+		AudioManager.play_sfx(st, vol, pitch)
+
 # ---- run state ----
 var running := false
 var selecting := false
@@ -467,6 +491,7 @@ func hurt_enemy(rec: Dictionary, dmg: float) -> void:
 	if rec.hp > 0.0:
 		return
 	drop_gem(rec.node.position)
+	sfx("explode", -10.0, randf_range(0.9, 1.15))
 	if rec.drop_pod:
 		drop_pod(rec.node.position.x, rec.node.position.z)
 	recycle_enemy(rec)
@@ -532,6 +557,7 @@ func _launch_bolt(dir: Vector3, opts: Dictionary) -> void:
 		"r2": HIT_R2 * loadout.stats.area,
 	})
 	_sm_fired += 1
+	sfx("laser", -16.0, randf_range(0.95, 1.12))
 
 
 func recycle_bolt(i: int) -> void:
@@ -666,6 +692,8 @@ func update_player(dt: float) -> void:
 		throttle = 0.0
 	throttle = clampf(throttle, 0.0, 1.0)
 
+	if Input.is_action_just_pressed("boost") and boost_t <= 0.01:
+		sfx("boost", -10.0)
 	if Input.is_action_pressed("boost"):
 		boost_t = maxf(boost_t, 0.05)
 	boost_t = maxf(0.0, boost_t - dt)
@@ -768,6 +796,7 @@ func update_enemies(dt: float) -> void:
 			damage_flash = 1.0
 			shake_amt = 0.4
 			hit_flag = true
+			sfx("hurt", -5.0)
 			if GameState.damage():
 				end_run(false)
 				return
@@ -838,6 +867,7 @@ func update_gems(dt: float) -> void:
 		if d2 < 2.0 or g.life <= 0.0:
 			if d2 < 2.0:
 				GameState.add_xp(1)
+				sfx("gem", -18.0, randf_range(0.95, 1.2))
 			g.mesh.visible = false
 			gem_pool.append(g.mesh)
 			gems[i] = gems[gems.size() - 1]
@@ -1036,12 +1066,20 @@ func reset_run() -> void:
 	for i in START_HORDE:
 		spawn_enemy()
 	ui.start_mission()
+	AudioManager.play_music(MUS_COMBAT)
 
 
 func end_run(won: bool) -> void:
+	if not running:
+		return
 	running = false
 	selecting = false
 	ui.close_offers()
+	AudioManager.stop_music()
+	if won:
+		sfx("win", -2.0)
+	else:
+		sfx("lose", -2.0)
 	GameState.end_run(won)
 	ui.show_result(won, GameState.run.level, GameState.run.kills, int(GameState.run.elapsed))
 	if won:
@@ -1061,6 +1099,7 @@ func _resolve_levelups() -> void:
 	selecting = true
 	current_offers = LoadoutLib.offer_three(loadout)
 	ui.open_offers(current_offers)
+	sfx("levelup", -7.0)
 
 
 func _apply_pick(choice: Dictionary) -> void:
@@ -1069,6 +1108,7 @@ func _apply_pick(choice: Dictionary) -> void:
 	GameState.run.max_hp = GameState.MAX_HP + int(loadout.stats.hp_bonus)
 	if heals:
 		GameState.heal(1)
+	sfx("pick", -8.0)
 	print("[levelup] picked: %s (%s)" % [choice.label, choice.kind])
 	if GameState.run.pending_levels > 0:
 		current_offers = LoadoutLib.offer_three(loadout)
@@ -1204,6 +1244,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					_trigger_roll()
 				elif dy < 0.0:
 					boost_t = maxf(boost_t, 0.55)
+					sfx("boost", -10.0)
 				else:
 					if u_turn <= 0.0:
 						u_turn = 0.42
@@ -1229,6 +1270,7 @@ func _trigger_roll() -> void:
 		i_frames = maxf(i_frames, ROLL_TIME + 0.08)
 		rolled_flag = true
 		ever_rolled = true
+		sfx("roll", -9.0, randf_range(0.95, 1.05))
 
 
 # ---------------- boss fight ----------------
@@ -1242,6 +1284,8 @@ func _spawn_boss() -> void:
 	boss.position.y = 4.0
 	pitch_unlocked = true
 	throttle = 0.55
+	AudioManager.play_music(MUS_BOSS)
+	sfx("alarm", -6.0)
 	ui.say("vicar", "Guardian of the Well inbound. All-axis flight is yours — pitch is live on W and S.")
 	ui.say("hatch", "Monkey-bot has shielded core! Blast both arms first, kid — then the chest!")
 	ui.say("kite", "Finally, a real fight. Try not to die boring, Rook.")
@@ -1290,6 +1334,7 @@ func update_boss_bolts(dt: float) -> void:
 				damage_flash = 1.0
 				shake_amt = maxf(shake_amt, 0.35)
 				hit_flag = true
+				sfx("hurt", -5.0)
 				if GameState.damage():
 					end_run(false)
 					return

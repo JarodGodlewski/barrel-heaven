@@ -22,7 +22,7 @@ var radar: RadarView
 var throttle_view: ThrottleView
 var boss_bar: BossBarView
 var levelup_root: Control
-var cards_box: HBoxContainer
+var cards_box: GridContainer
 var overlay_panel: PanelContainer
 var overlay_title: Label
 var overlay_tag: Label
@@ -36,6 +36,8 @@ var line_label: Label
 
 var _hud_acc := 0.0
 var _radar_acc := 0.0
+var _portrait := false
+var _last_vp := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -221,9 +223,11 @@ func _build_levelup() -> void:
 	h2.text = "Pick a hardpoint"
 	h2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	cards_box = HBoxContainer.new()
-	cards_box.add_theme_constant_override("separation", 12)
-	cards_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards_box = GridContainer.new()
+	cards_box.columns = 3
+	cards_box.add_theme_constant_override("h_separation", 12)
+	cards_box.add_theme_constant_override("v_separation", 10)
+	cards_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(cards_box)
 
 	var fine := _label(v, 10, DIM)
@@ -361,7 +365,112 @@ static func fmt_time(t: float) -> String:
 	return "%d:%02d" % [int(t) / 60, int(t) % 60]
 
 
+# ---------------- responsive layout (portrait-first mobile) ----------------
+
+func _check_layout() -> void:
+	var vp := root.size
+	if vp == _last_vp or vp == Vector2.ZERO:
+		return
+	_last_vp = vp
+	var portrait := vp.x < vp.y * 1.05 or vp.x < 720.0
+	if portrait != _portrait:
+		_portrait = portrait
+	_apply_layout()
+	_apply_safe_area(vp)
+
+
+func _apply_layout() -> void:
+	var p := _portrait
+	# stats block: top-right in landscape, under brand in portrait
+	if p:
+		stats_label.anchor_left = 0.0
+		stats_label.offset_left = 14.0
+		stats_label.offset_right = 300.0
+		stats_label.offset_top = 66.0
+		stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		hp_label.anchor_left = 0.0
+		hp_label.offset_left = 14.0
+		hp_label.offset_right = 300.0
+		hp_label.offset_top = 150.0
+		hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		kit_label.size.x = root.size.x - 24.0
+	else:
+		stats_label.anchor_left = 1.0
+		stats_label.offset_left = -420.0
+		stats_label.offset_right = -12.0
+		stats_label.offset_top = 10.0
+		stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		hp_label.anchor_left = 1.0
+		hp_label.offset_left = -420.0
+		hp_label.offset_right = -12.0
+		hp_label.offset_top = 88.0
+		hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		kit_label.size.x = 900.0
+
+	# radar + throttle: smaller, tucked bottom-right in portrait
+	if p:
+		radar.offset_left = -104.0
+		radar.offset_top = -142.0
+		radar.offset_right = -16.0
+		radar.offset_bottom = -54.0
+		throttle_view.offset_left = -116.0
+		throttle_view.offset_top = -142.0
+		throttle_view.offset_right = -106.0
+		throttle_view.offset_bottom = -54.0
+	else:
+		radar.offset_left = -126.0
+		radar.offset_top = -164.0
+		radar.offset_right = -14.0
+		radar.offset_bottom = -52.0
+		throttle_view.offset_left = -140.0
+		throttle_view.offset_top = -164.0
+		throttle_view.offset_right = -126.0
+		throttle_view.offset_bottom = -52.0
+
+	# comms: full-width strip above radar zone in portrait
+	if p:
+		comms_panel.offset_left = 12.0
+		comms_panel.offset_right = -12.0
+		comms_panel.offset_top = -206.0
+		comms_panel.offset_bottom = -96.0
+		blob.custom_minimum_size = Vector2(64, 64)
+		line_label.custom_minimum_size = Vector2(0, 40)
+	else:
+		comms_panel.offset_left = 14.0
+		comms_panel.offset_right = 0.0
+		comms_panel.offset_top = -176.0
+		comms_panel.offset_bottom = -56.0
+		blob.custom_minimum_size = Vector2(96, 96)
+
+	# level-up cards stack single-column in portrait
+	cards_box.columns = 1 if p else 3
+
+	# boss bar narrows to fit
+	boss_bar.offset_left = -160.0 if p else -210.0
+	boss_bar.offset_right = 160.0 if p else 210.0
+
+
+func _apply_safe_area(vp: Vector2) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var window := get_window()
+	if window == null or window.size.y <= 0:
+		return
+	var scale := vp.y / float(window.size.y)
+	var safe := DisplayServer.get_display_safe_area()
+	var win := Vector2(window.size)
+	var left := maxf(safe.position.x / scale, 0.0)
+	var top := maxf(safe.position.y / scale, 0.0)
+	var right := maxf((win.x - safe.end.x) / scale, 0.0)
+	var bottom := maxf((win.y - safe.end.y) / scale, 0.0)
+	root.offset_left = left
+	root.offset_top = top
+	root.offset_right = -right
+	root.offset_bottom = -bottom
+
+
 func poll(dt: float, main: Node) -> void:
+	_check_layout()
 	var run: Dictionary = main.GameState_run()
 	if not run.is_empty():
 		_hud_acc += dt

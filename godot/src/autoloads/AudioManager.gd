@@ -30,6 +30,11 @@ func play_music(stream: AudioStream, volume_db := 0.0) -> void:
 	if stream == null or stream == _current_music:
 		return
 	_current_music = stream
+	if stream is AudioStreamWAV:
+		var wav := stream as AudioStreamWAV
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_begin = 0
+		wav.loop_end = wav.data.size() / 2   # 16-bit mono frames
 	_music.stream = stream
 	_music.volume_db = volume_db
 	_music.play()

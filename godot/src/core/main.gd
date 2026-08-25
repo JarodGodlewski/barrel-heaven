@@ -229,12 +229,13 @@ func _ship_mat(mask: Vector3) -> ShaderMaterial:
 func _tri_mesh(verts: PackedVector3Array, mat: Material) -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var normal := (verts[1] - verts[0]).cross(verts[2] - verts[0]).normalized()
 	for i in range(0, verts.size(), 3):
-		st.set_normal((verts[i + 1] - verts[i]).cross(verts[i + 2] - verts[i]).normalized())
+		st.set_normal(normal)
 		st.add_vertex(verts[i])
-		st.set_normal((verts[i + 2] - verts[i + 1]).cross(verts[i] - verts[i + 1]).normalized())
+		st.set_normal(normal)
 		st.add_vertex(verts[i + 1])
-		st.set_normal((verts[i] - verts[i + 2]).cross(verts[i + 1] - verts[i + 2]).normalized())
+		st.set_normal(normal)
 		st.add_vertex(verts[i + 2])
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()

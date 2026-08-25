@@ -48,6 +48,8 @@ func _ready() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	# Ensure UI renders on top of 3D scene
+	layer = 10
 	_build_hud()
 	_build_radar()
 	_build_boss_bar()
@@ -397,7 +399,6 @@ func _build_pause() -> void:
 
 func show_pause() -> void:
 	pause_panel.visible = true
-
 
 func hide_pause() -> void:
 	pause_panel.visible = false

@@ -535,23 +535,23 @@ func _apply_layout() -> void:
 	boss_bar.offset_right = 160.0 if p else 210.0
 
 
-func _apply_safe_area(vp: Vector2) -> void:
+func _apply_safe_area(_vp: Vector2) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var window := get_window()
 	if window == null or window.size.y <= 0:
 		return
-	var scale := vp.y / float(window.size.y)
+	var win_rect := Rect2(Vector2(), Vector2(window.size))
 	var safe := DisplayServer.get_display_safe_area()
-	var win := Vector2(window.size)
-	var left := maxf(safe.position.x / scale, 0.0)
-	var top := maxf(safe.position.y / scale, 0.0)
-	var right := maxf((win.x - safe.end.x) / scale, 0.0)
-	var bottom := maxf((win.y - safe.end.y) / scale, 0.0)
-	root.offset_left = left
-	root.offset_top = top
-	root.offset_right = -right
-	root.offset_bottom = -bottom
+	var inner := safe.intersection(win_rect)
+	if inner.size.x <= 0.0 or inner.size.y <= 0.0:
+		return
+	var sx := _vp.x / win_rect.size.x
+	var sy := _vp.y / win_rect.size.y
+	root.offset_left = inner.position.x * sx
+	root.offset_top = inner.position.y * sy
+	root.offset_right = -(win_rect.size.x - inner.end.x) * sx
+	root.offset_bottom = -(win_rect.size.y - inner.end.y) * sy
 
 
 func poll(dt: float, main: Node) -> void:

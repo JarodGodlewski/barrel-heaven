@@ -20,8 +20,44 @@ const MAX_HORDE := 64
 const HIT_R2 := 2.4
 const THROTTLE_RATE := 0.9
 
+## Enemy roster — unlocks over time, weighted spawns.
+## hp scales with elapsed: +floor(elapsed/40) like the JS MVP.
+const ENEMY_TYPES: Dictionary[String, Dictionary] = {
+	"chaser": {
+		"hp": 2.0, "speed": 16.0, "scale": 0.85, "gems": 1,
+		"body": Color(0.55, 0.18, 0.18), "accent": Color(0.90, 0.25, 0.20),
+		"unlock": 0.0, "weight": 10.0,
+	},
+	"weaver": {
+		"hp": 1.0, "speed": 27.0, "scale": 0.70, "gems": 1,
+		"body": Color(0.80, 0.42, 0.08), "accent": Color(1.00, 0.68, 0.20),
+		"unlock": 30.0, "weight": 6.0,
+	},
+	"turret": {
+		"hp": 5.0, "speed": 5.0, "scale": 1.00, "gems": 2,
+		"body": Color(0.32, 0.18, 0.58), "accent": Color(0.70, 0.42, 1.00),
+		"unlock": 70.0, "weight": 4.0,
+	},
+	"splitter": {
+		"hp": 3.0, "speed": 14.0, "scale": 0.90, "gems": 1,
+		"body": Color(0.08, 0.48, 0.38), "accent": Color(0.20, 0.90, 0.60),
+		"unlock": 120.0, "weight": 4.0,
+	},
+	"brute": {
+		"hp": 16.0, "speed": 9.0, "scale": 1.70, "gems": 3,
+		"body": Color(0.28, 0.07, 0.11), "accent": Color(1.00, 0.22, 0.32),
+		"unlock": 200.0, "weight": 2.5,
+	},
+	"mini": {
+		"hp": 1.0, "speed": 30.0, "scale": 0.45, "gems": 1,
+		"body": Color(0.08, 0.48, 0.38), "accent": Color(0.20, 0.90, 0.60),
+		"unlock": 999999.0, "weight": 0.0,   # only from splitters
+	},
+}
+
 var boss_time := 480.0
 var sector_end := 600.0
+var unlock_scale := 1.0   # smoke compresses enemy unlock times
 
 const SHIP_SHADER := preload("res://assets/shaders/ship.gdshader")
 const ENEMY_SHADER := preload("res://assets/shaders/enemy.gdshader")
@@ -94,7 +130,8 @@ var gems: Array = []
 var pods: Array = []
 var orbiters: Array = []
 var caches: Array = []
-var enemy_pool: Array = []
+var enemy_pool: Dictionary = {}   # type -> Array of hidden nodes
+var _sm_types := {}
 var bolt_pool: Array = []
 var gem_pool: Array = []
 var pod_pool: Array = []
@@ -117,6 +154,13 @@ var pitch_ang := 0.0
 var pitch_unlocked := false
 var _victory_scheduled := false
 var _sm_arm := 0
+var _sm_super := false
+var _shot_t := -1.0
+var _sky_mat: ShaderMaterial
+var trail: CPUParticles3D
+var asteroids: Array = []
+var _rock_mat: StandardMaterial3D
+const ASTEROID_COUNT := 14
 
 var _fwd := Vector3.ZERO
 var _to := Vector3.UP
@@ -124,11 +168,14 @@ var _to := Vector3.UP
 
 func _ready() -> void:
 	smoke_mode = OS.get_cmdline_user_args().has("--smoke")
+	if OS.get_cmdline_user_args().has("--shot"):
+		_shot_t = 0.0
 	if smoke_mode:
 		Settings.values.tts_voice_lines = false
 		Engine.time_scale = 8.0
 		boss_time = 20.0
 		sector_end = 40.0
+		unlock_scale = sector_end / 600.0
 	randomize()
 	_build_world()
 	player = _build_player_ship()
@@ -183,6 +230,7 @@ func _build_world() -> void:
 	var sky_mat := ShaderMaterial.new()
 	sky_mat.shader = SKY_SHADER
 	sky.sky_material = sky_mat
+	_sky_mat = sky_mat
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -326,6 +374,32 @@ func _build_player_ship() -> Node3D:
 	engine_light.position.z = -1.5
 	root.add_child(engine_light)
 
+	trail = CPUParticles3D.new()
+	trail.position = Vector3(0, 0, -1.6)
+	trail.amount = 36
+	trail.lifetime = 0.45
+	trail.local_coords = true
+	trail.direction = Vector3(0, 0, -1)
+	trail.spread = 4.0
+	trail.initial_velocity_min = 6.0
+	trail.initial_velocity_max = 10.0
+	trail.gravity = Vector3.ZERO
+	trail.scale_amount_min = 0.6
+	trail.scale_amount_max = 1.2
+	var tmesh := SphereMesh.new()
+	tmesh.radius = 0.07
+	tmesh.height = 0.14
+	tmesh.radial_segments = 4
+	tmesh.rings = 2
+	var tmat := StandardMaterial3D.new()
+	tmat.albedo_color = Color(0.24, 0.88, 0.76)
+	tmat.emission_enabled = true
+	tmat.emission = Color(0.24, 0.88, 0.76)
+	tmat.emission_energy_multiplier = 1.2
+	tmesh.material = tmat
+	trail.mesh = tmesh
+	root.add_child(trail)
+
 	return root
 
 
@@ -335,28 +409,80 @@ func _enemy_mat() -> ShaderMaterial:
 	return m
 
 
-func _make_enemy_node() -> Node3D:
+func _add_part(root: Node3D, mesh: Mesh, mat: Material, pos: Vector3, rot_x := 0.0) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.position = pos
+	if rot_x != 0.0:
+		mi.rotation_degrees.x = rot_x
+	root.add_child(mi)
+
+
+func _make_enemy_node(type: String) -> Node3D:
 	var root := Node3D.new()
 	var mat := _enemy_mat()
+	root.set_meta("mat", mat)
 
-	var body_cone := CylinderMesh.new()
-	body_cone.top_radius = 0.0
-	body_cone.bottom_radius = 0.42
-	body_cone.height = 2.4
-	body_cone.radial_segments = 4
-	var body := MeshInstance3D.new()
-	body.mesh = body_cone
-	body.material_override = mat
-	body.rotation_degrees.x = 90.0
-	root.add_child(body)
-
-	var wing_box := BoxMesh.new()
-	wing_box.size = Vector3(2.1, 0.06, 0.7)
-	var wing := MeshInstance3D.new()
-	wing.mesh = wing_box
-	wing.material_override = mat
-	wing.position.z = -0.15
-	root.add_child(wing)
+	match type:
+		"weaver":
+			var cone := CylinderMesh.new()
+			cone.top_radius = 0.0
+			cone.bottom_radius = 0.30
+			cone.height = 2.6
+			cone.radial_segments = 4
+			_add_part(root, cone, mat, Vector3.ZERO, 90.0)
+			var wing := BoxMesh.new()
+			wing.size = Vector3(1.4, 0.05, 0.5)
+			_add_part(root, wing, mat, Vector3(0, 0, -0.2))
+		"turret":
+			var core := SphereMesh.new()
+			core.radius = 0.55
+			core.height = 1.1
+			core.radial_segments = 4
+			core.rings = 2
+			_add_part(root, core, mat, Vector3.ZERO)
+			var shell := TorusMesh.new()
+			shell.inner_radius = 0.72
+			shell.outer_radius = 0.92
+			_add_part(root, shell, mat, Vector3.ZERO)
+		"brute":
+			var hull := BoxMesh.new()
+			hull.size = Vector3(1.5, 1.0, 2.4)
+			_add_part(root, hull, mat, Vector3.ZERO)
+			var nose := CylinderMesh.new()
+			nose.top_radius = 0.0
+			nose.bottom_radius = 0.55
+			nose.height = 1.2
+			nose.radial_segments = 4
+			_add_part(root, nose, mat, Vector3(0, 0, 1.7), 90.0)
+			for sx in [-1.0, 1.0]:
+				var plate := BoxMesh.new()
+				plate.size = Vector3(0.35, 1.3, 1.4)
+				_add_part(root, plate, mat, Vector3(0.95 * sx, 0, -0.2))
+		"splitter", "mini":
+			var blob := SphereMesh.new()
+			blob.radius = 0.55
+			blob.height = 1.1
+			blob.radial_segments = 6
+			blob.rings = 3
+			_add_part(root, blob, mat, Vector3.ZERO)
+			var spike := CylinderMesh.new()
+			spike.top_radius = 0.0
+			spike.bottom_radius = 0.22
+			spike.height = 0.8
+			spike.radial_segments = 4
+			_add_part(root, spike, mat, Vector3(0, 0, 0.6), 90.0)
+		_:   # chaser
+			var cone := CylinderMesh.new()
+			cone.top_radius = 0.0
+			cone.bottom_radius = 0.42
+			cone.height = 2.4
+			cone.radial_segments = 4
+			_add_part(root, cone, mat, Vector3.ZERO, 90.0)
+			var wing := BoxMesh.new()
+			wing.size = Vector3(2.1, 0.06, 0.7)
+			_add_part(root, wing, mat, Vector3(0, 0, -0.15))
 
 	root.visible = false
 	add_child(root)
@@ -377,36 +503,96 @@ func wrap_to_arena(v: Vector3) -> void:
 	elif v.z < -h: v.z = h
 
 
-func spawn_enemy(boss := false) -> void:
-	var node: Node3D = enemy_pool.pop_back() if enemy_pool.size() > 0 else _make_enemy_node()
+func pick_enemy_type() -> String:
+	var e: float = GameState.run.elapsed
+	var total := 0.0
+	var weights := {}
+	for id in ENEMY_TYPES:
+		var def: Dictionary = ENEMY_TYPES[id]
+		var w: float = def.weight
+		var unlock_at: float = float(def.unlock) * unlock_scale
+		if w <= 0.0 or e < unlock_at:
+			continue
+		# ramp weight in over 30s after unlock
+		w *= clampf((e - unlock_at) / 30.0, 0.15, 1.0)
+		weights[id] = w
+		total += w
+	if total <= 0.0:
+		return "chaser"
+	var roll := randf() * total
+	for id in weights:
+		roll -= weights[id]
+		if roll <= 0.0:
+			return id
+	return "chaser"
+
+
+func spawn_enemy(type := "") -> void:
+	if type == "":
+		type = pick_enemy_type()
+	var def: Dictionary = ENEMY_TYPES[type]
+
+	var pool: Array = enemy_pool.get(type, [])
+	var node: Node3D
+	var mat: ShaderMaterial
+	if pool.size() > 0:
+		node = pool.pop_back()
+		mat = node.get_meta("mat")
+	else:
+		node = _make_enemy_node(type)
+		mat = node.get_meta("mat")
+		mat.set_shader_parameter("u_body", def.body)
+		mat.set_shader_parameter("u_accent", def.accent)
+
 	var ang := randf() * TAU
-	var dist := 55.0 if boss else 70.0 + randf() * 50.0
+	var dist := 70.0 + randf() * 50.0
 	node.position = player.position + Vector3(cos(ang), 0, sin(ang)) * dist
 	wrap_to_arena(node.position)
-	node.scale = Vector3.ONE * (2.35 if boss else 0.85)
+
+	var elapsed: float = GameState.run.elapsed
+	var hp: float = def.hp + float(int(elapsed / 40.0))
+	var speed: float = def.speed + randf() * 4.0 + minf(10.0, elapsed * 0.10)
+	var base_scale: float = def.scale
+	var elite: bool = type != "mini" and randf() < 0.05
+	if elite:
+		hp *= 3.0
+		base_scale *= 1.35
+		speed *= 0.9
+
+	node.scale = Vector3.ONE * (base_scale * 0.2)   # warp-in pop
+	var mat2: ShaderMaterial = node.get_meta("mat")
+	mat2.set_shader_parameter("u_body", def.body)
+	mat2.set_shader_parameter("u_accent", Color(1.0, 0.80, 0.25) if elite else def.accent)
+	mat2.set_shader_parameter("u_hp_ratio", 1.0)
+	mat2.set_shader_parameter("u_flash", 0.0)
+	node.visible = true
+
 	var rec := {
 		"node": node,
-		"boss": boss,
-		"drop_pod": boss,
-		"hp": (26.0 + GameState.run.elapsed * 0.35) if boss else 2.0 + float(int(GameState.run.elapsed / 40.0)),
-		"speed": 9.0 if boss else 16.0 + randf() * 10.0 + minf(14.0, GameState.run.elapsed * 0.15),
+		"mat": mat2,
+		"type": type,
+		"hp": hp,
+		"max_hp": hp,
+		"speed": speed,
+		"gems": int(def.gems) + (2 if elite else 0),
+		"base_scale": base_scale,
+		"elite": elite,
+		"flash": 0.0,
+		"spawn_t": 0.3,
+		"phase": randf() * TAU,
+		"fire_t": randf_range(1.2, 2.6),
 	}
-	if boss:
-		var ring_mesh := TorusMesh.new()
-		ring_mesh.inner_radius = 1.28
-		ring_mesh.outer_radius = 1.42
-		var ring_mat := StandardMaterial3D.new()
-		ring_mat.albedo_color = Color(0.94, 0.76, 0.29)
-		ring_mat.emission_enabled = true
-		ring_mat.emission = Color(1.0, 0.67, 0.2)
-		ring_mat.emission_energy_multiplier = 0.85
-		var ring := MeshInstance3D.new()
-		ring.mesh = ring_mesh
-		ring.material_override = ring_mat
-		ring.name = "AceRing"
-		node.add_child(ring)
-	node.visible = true
 	enemies.append(rec)
+	_sm_types[type] = true
+
+
+func spawn_enemy_at(type: String, pos: Vector3) -> void:
+	var before := enemies.size()
+	spawn_enemy(type)
+	if enemies.size() > before:
+		var rec: Dictionary = enemies[enemies.size() - 1]
+		rec.node.position = pos
+		wrap_to_arena(rec.node.position)
 
 
 func recycle_enemy(rec: Dictionary) -> void:
@@ -415,10 +601,10 @@ func recycle_enemy(rec: Dictionary) -> void:
 		enemies[idx] = enemies[enemies.size() - 1]
 		enemies.pop_back()
 	rec.node.visible = false
-	var ring: Node = rec.node.get_node_or_null("AceRing")
-	if ring:
-		ring.queue_free()
-	enemy_pool.append(rec.node)
+	var type: String = rec.type
+	if not enemy_pool.has(type):
+		enemy_pool[type] = []
+	enemy_pool[type].append(rec.node)
 
 
 func desired_horde() -> int:
@@ -500,15 +686,29 @@ func clear_caches() -> void:
 
 
 func hurt_enemy(rec: Dictionary, dmg: float) -> void:
-	if not rec.node.visible:
+	if not rec.node.visible or rec.spawn_t > 0.0:
 		return
 	rec.hp -= dmg
+	rec.flash = 1.0
+	var m: ShaderMaterial = rec.mat
+	m.set_shader_parameter("u_flash", 1.0)
+	m.set_shader_parameter("u_hp_ratio", clampf(float(rec.hp) / float(rec.max_hp), 0.0, 1.0))
 	if rec.hp > 0.0:
 		return
-	drop_gem(rec.node.position)
+	var pos: Vector3 = rec.node.position
+	for g in int(rec.gems):
+		var off: Vector3 = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * float(rec.base_scale)
+		drop_gem(pos + off)
+	spawn_flash(pos, Color(1.0, 0.6, 0.25), 2.2 * float(rec.base_scale))
 	sfx("explode", -10.0, randf_range(0.9, 1.15))
-	if rec.drop_pod:
-		drop_pod(rec.node.position.x, rec.node.position.z)
+	if rec.get("elite", false):
+		drop_pod(pos.x, pos.z)
+		ui.say_once("elite-down", "pip", "Elite down — supply pod on the field!")
+	if rec.type == "splitter":
+		for k in 3:
+			var a := randf() * TAU
+			spawn_enemy_at("mini", pos + Vector3(cos(a), 0, sin(a)) * 2.0)
+	GameState.add_super(3.0)
 	recycle_enemy(rec)
 	GameState.add_kill()
 
@@ -751,6 +951,8 @@ func update_player(dt: float) -> void:
 	player.rotation.x = -pitch_ang
 
 	engine_light.light_energy = 3.1 if boosting else 0.35 + throttle * 1.4
+	if trail != null:
+		trail.emitting = throttle > 0.05
 	if ship_body_mat:
 		ship_body_mat.set_shader_parameter("u_engine_pulse", 1.0 if boosting else 0.25 + throttle * 0.6)
 		ship_body_mat.set_shader_parameter("u_damage_flash", damage_flash)
@@ -790,9 +992,21 @@ func confine_player(dt: float) -> void:
 func update_enemies(dt: float) -> void:
 	var px := player.position.x
 	var pz := player.position.z
+	var el: float = GameState.run.elapsed
 	for i in range(enemies.size() - 1, -1, -1):
 		var rec: Dictionary = enemies[i]
 		var e: Node3D = rec.node
+
+		# warp-in pop
+		if rec.spawn_t > 0.0:
+			rec.spawn_t = maxf(0.0, rec.spawn_t - dt)
+			var k: float = 1.0 - float(rec.spawn_t) / 0.3
+			e.scale = Vector3.ONE * (float(rec.base_scale) * (0.2 + 0.8 * k))
+		# hit flash decay
+		if rec.flash > 0.0:
+			rec.flash = maxf(0.0, rec.flash - dt * 6.0)
+			(rec.mat as ShaderMaterial).set_shader_parameter("u_flash", rec.flash)
+
 		var dx := px - e.position.x
 		var dz := pz - e.position.z
 		var d2 := dx * dx + dz * dz
@@ -802,22 +1016,52 @@ func update_enemies(dt: float) -> void:
 			while dy > PI: dy -= TAU
 			while dy < -PI: dy += TAU
 			e.rotation.y += dy * minf(1.0, 4.0 * dt)
-		_fwd = heading(e.rotation.y)
-		e.position += _fwd * float(rec.speed) * dt
+
+		var move := Vector3(dx, 0.0, dz).normalized() if d2 > 0.0001 else Vector3.ZERO
+		match rec.type:
+			"weaver":
+				var side := Vector3(-move.z, 0.0, move.x)
+				var sway := sin(el * 3.0 + float(rec.phase)) * 0.85
+				move = (move + side * sway).normalized()
+			"turret":
+				rec.fire_t -= dt
+				if rec.fire_t <= 0.0 and rec.spawn_t <= 0.0 and d2 < 57600.0:
+					rec.fire_t = randf_range(2.2, 3.2)
+					boss_bolt(e.position + Vector3(0, 0.4, 0), Vector3(dx, 0, dz).normalized(), 40.0)
+					sfx("laser", -15.0, 0.65)
+			"brute", "mini":
+				pass
+		e.position += move * float(rec.speed) * dt
 		wrap_to_arena(e.position)
 
-		var hit_r := 16.0 if rec.boss else 3.24
-		if d2 < hit_r and i_frames <= 0.0 and not smoke_mode:
-			damage_flash = 1.0
-			shake_amt = 0.4
-			hit_flag = true
-			sfx("hurt", -5.0)
-			if GameState.damage():
-				end_run(false)
-				return
-			i_frames = I_FRAMES
-			if not rec.boss:
-				recycle_enemy(rec)
+		# contact damage
+		if rec.spawn_t <= 0.0 and i_frames <= 0.0 and not smoke_mode:
+			var hit_r := 3.24 * float(rec.base_scale)
+			var sticks_around: bool = rec.type == "brute" or rec.type == "turret"
+			if d2 < hit_r:
+				damage_flash = 1.0
+				shake_amt = 0.4
+				hit_flag = true
+				sfx("hurt", -5.0)
+				if GameState.damage():
+					end_run(false)
+					return
+				i_frames = I_FRAMES
+				if not sticks_around:
+					recycle_enemy(rec)
+
+	# separation pass — keeps the swarm from stacking into one blob
+	for a in range(enemies.size() - 1, 0, -1):
+		var ra: Dictionary = enemies[a]
+		for b in range(a - 1, -1, -1):
+			var rb: Dictionary = enemies[b]
+			var dv: Vector3 = ra.node.position - rb.node.position
+			var ds := dv.length_squared()
+			var min_d := 1.7 * (float(ra.base_scale) + float(rb.base_scale))
+			if ds < min_d * min_d and ds > 0.0001:
+				var push := dv.normalized() * (min_d - sqrt(ds)) * 2.5 * dt
+				ra.node.position += push
+				rb.node.position -= push
 
 
 func update_projectiles(dt: float) -> void:
@@ -991,6 +1235,48 @@ func update_orbiters(dt: float) -> void:
 			orbiters.remove_at(i)
 
 
+func spawn_asteroids() -> void:
+	if _rock_mat == null:
+		_rock_mat = StandardMaterial3D.new()
+		_rock_mat.albedo_color = Color(0.24, 0.26, 0.30)
+		_rock_mat.roughness = 1.0
+	for i in ASTEROID_COUNT:
+		var m := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 1.0
+		sm.height = 2.0
+		sm.radial_segments = 6
+		sm.rings = 4
+		sm.material = _rock_mat
+		m.mesh = sm
+		var s := randf_range(3.0, 9.0)
+		m.scale = Vector3(s * randf_range(0.7, 1.3), s * randf_range(0.7, 1.3), s * randf_range(0.7, 1.3))
+		var ang := randf() * TAU
+		var dist := randf_range(120.0, ARENA / 2.0 - 40.0)
+		m.position = Vector3(cos(ang) * dist, randf_range(-14.0, 10.0), sin(ang) * dist)
+		m.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
+		add_child(m)
+		asteroids.append({
+			"mesh": m,
+			"spin": Vector3(randf_range(-0.25, 0.25), randf_range(-0.25, 0.25), randf_range(-0.25, 0.25)),
+			"drift": Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0)),
+		})
+
+
+func update_asteroids(dt: float) -> void:
+	for a in asteroids:
+		var m: MeshInstance3D = a.mesh
+		m.rotation += (a.spin as Vector3) * dt
+		m.position += (a.drift as Vector3) * dt
+		wrap_to_arena(m.position)
+
+
+func clear_asteroids() -> void:
+	for a in asteroids:
+		a.mesh.queue_free()
+	asteroids.clear()
+
+
 func update_camera(dt: float) -> void:
 	var vp := get_window().size
 	var portrait := vp.y > vp.x
@@ -1024,6 +1310,8 @@ func update_camera(dt: float) -> void:
 # ---------------- run flow ----------------
 
 func reset_run() -> void:
+	ui.hide_overlay()
+	ui.hide_pause()
 	GameState.reset_meta()
 	GameState.new_run()
 	loadout = LoadoutLib.empty_loadout()
@@ -1078,6 +1366,8 @@ func reset_run() -> void:
 	orbiters.clear()
 	clear_caches()
 	spawn_field_caches()
+	clear_asteroids()
+	spawn_asteroids()
 	for i in START_HORDE:
 		spawn_enemy()
 	ui.start_mission()
@@ -1148,6 +1438,12 @@ func _process(delta: float) -> void:
 		else:
 			ui.hide_pause()
 
+	# Smart Bomb super
+	if Input.is_action_just_pressed("super") and running and not selecting and not paused:
+		fire_super()
+	if smoke_mode and running and not paused and GameState.run.get("super_meter", 0.0) >= GameState.SUPER_MAX:
+		fire_super()
+
 	if running and not selecting and not paused:
 		GameState.run.elapsed += dt
 		spawn_acc += dt
@@ -1164,6 +1460,13 @@ func _process(delta: float) -> void:
 		if boss != null:
 			boss.update(dt)
 
+		# sky heats up as the Guardian's jump window approaches
+		if _sky_mat != null:
+			var heat := clampf((GameState.run.elapsed - (boss_time - 90.0)) / 90.0, 0.0, 1.0)
+			_sky_mat.set_shader_parameter("u_top", Color(0.02, 0.04, 0.08).lerp(Color(0.13, 0.02, 0.07), heat))
+			_sky_mat.set_shader_parameter("u_bottom", Color(0.01, 0.02, 0.05).lerp(Color(0.06, 0.01, 0.04), heat))
+
+		update_asteroids(dt)
 		tick_weapons(dt)
 		update_player(dt)
 		update_enemies(dt)
@@ -1220,6 +1523,18 @@ func _process(delta: float) -> void:
 	hit_flag = false
 	ui.poll(dt, self)
 	_smoke_checks()
+
+	# debug: --shot [with optional --smoke for mid-combat capture]
+	if _shot_t >= 0.0:
+		_shot_t += delta
+		if _shot_t > 1.5:
+			var tex := get_viewport().get_texture()
+			if tex != null:
+				var img := tex.get_image()
+				if img != null:
+					img.save_png("user://shot.png")
+					print("[SHOT] saved user://shot.png")
+			get_tree().quit()
 
 
 # ---------------- touch gestures (one finger) ----------------
@@ -1297,6 +1612,26 @@ func _trigger_roll() -> void:
 
 
 # ---------------- boss fight ----------------
+
+func fire_super() -> void:
+	if not GameState.spend_super():
+		return
+	pulse_nova(150.0, 10.0 * loadout.stats.damage)
+	if boss != null and not boss.dead:
+		for part in boss.part_positions():
+			boss.take_damage(part.kind, 8.0 * loadout.stats.damage)
+	for i in range(boss_bolts.size() - 1, -1, -1):
+		var b: Dictionary = boss_bolts[i]
+		b.mesh.visible = false
+		boss_bolt_pool.append(b.mesh)
+	boss_bolts.clear()
+	spawn_flash(player.position, Color(0.5, 1.0, 0.9), 34.0)
+	shake_amt = 1.2
+	sfx("slam", 0.0)
+	sfx("bigexplode", -4.0)
+	ui.say_once("super-used", "hatch", "Smart bomb out! That cleared the sky!")
+	_sm_super = true
+
 
 func _spawn_boss() -> void:
 	boss = BossGuardian.new()
@@ -1442,6 +1777,11 @@ func _smoke_checks() -> void:
 	if el >= 5.0 and not _sm_did_xp:
 		_sm_did_xp = true
 		GameState.add_xp(20)
+	if el >= 12.0 and GameState.run.get("super_meter", 0.0) < 100.0:
+		GameState.add_super(100.0)
+	if el >= 15.0 and asteroids.size() < 10:
+		_fail("asteroids missing (%d)" % asteroids.size())
+		return
 	if el >= 7.0 and GameState.run.pending_levels == 0 and GameState.run.level < 2:
 		_fail("no level-up by 7s (xp=%d lvl=%d)" % [GameState.run.xp, GameState.run.level])
 		return
@@ -1461,24 +1801,33 @@ func _smoke_checks() -> void:
 	if el >= boss_time + 1.5 and boss == null and not boss_spawned:
 		_fail("boss never spawned")
 		return
-	# deterministic Guardian kill: armL -> armR -> core exposed -> core dead
+	# deterministic Guardian kill: arm -> arm -> core exposed -> core dead
+	# (state-aware: auto-fire weapons may beat us to each stage, which is fine)
 	var sm_boss_ok := true
 	if boss != null and not boss.dead:
-		if el >= boss_time + 2.0 and _sm_arm == 0:
+		if _sm_arm == 0 and boss.arms_alive == 2:
 			_sm_arm = 1
-			boss.take_damage("armL", 99999.0)
+			if boss.parts["armL"].alive:
+				boss.take_damage("armL", 99999.0)
+			else:
+				boss.take_damage("armR", 99999.0)
 			sm_boss_ok = boss.arms_alive == 1
-		elif el >= boss_time + 3.0 and _sm_arm == 1:
+		elif _sm_arm <= 1 and boss.arms_alive == 1 and not boss.core_vulnerable:
 			_sm_arm = 2
-			boss.take_damage("armR", 99999.0)
+			if boss.parts["armL"].alive:
+				boss.take_damage("armL", 99999.0)
+			else:
+				boss.take_damage("armR", 99999.0)
 			sm_boss_ok = boss.core_vulnerable
-		elif el >= boss_time + 4.0 and _sm_arm == 2:
+		elif _sm_arm <= 2 and boss.core_vulnerable:
 			_sm_arm = 3
 			boss.take_damage("core", 99999.0)
 			sm_boss_ok = boss.dead
 		if not sm_boss_ok:
 			_fail("boss damage chain broken at stage %d" % _sm_arm)
 			return
+	elif boss != null and boss.dead and _sm_arm < 3:
+		_sm_arm = 3   # weapons killed the Guardian outright — chain proven
 	if el >= 30.0 or GameState.run.elapsed >= sector_end or not running:
 		if _sm_fired < 20:
 			_fail("weapons barely fired (%d)" % _sm_fired)
@@ -1495,9 +1844,15 @@ func _smoke_checks() -> void:
 		if smoke_mode and GameState.run.won != true:
 			_fail("run did not end in victory (boss phase)")
 			return
-		print("GAME SMOKE OK — fired=%d maxEnemies=%d lvl=%d kills=%d hp=%d evo=%s boss=%s won=%s" % [
+		if smoke_mode and not _sm_super:
+			_fail("smart bomb never fired")
+			return
+		if smoke_mode and _sm_types.size() < 3:
+			_fail("enemy variety never appeared (types=%s)" % [str(_sm_types.keys())])
+			return
+		print("GAME SMOKE OK — fired=%d maxEnemies=%d lvl=%d kills=%d hp=%d evo=%s boss=%s won=%s types=%s" % [
 			_sm_fired, _sm_max_enemies, GameState.run.level, GameState.run.kills,
-			GameState.run.hp, _sm_evo_ok, boss_spawned, GameState.run.won])
+			GameState.run.hp, _sm_evo_ok, boss_spawned, GameState.run.won, str(_sm_types.keys())])
 		get_tree().quit(0)
 	elif el >= 45.0:
 		print("GAME SMOKE TIMEOUT — asserting partial: fired=%d" % _sm_fired)

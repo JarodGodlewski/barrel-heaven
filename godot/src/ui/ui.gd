@@ -17,6 +17,7 @@ const PANEL_BG := Color(0.024, 0.047, 0.078, 0.82)
 
 var root: Control
 var xp_fill: ColorRect
+var super_fill: ColorRect
 var kit_label: Label
 var stats_label: Label
 var hp_label: Label
@@ -113,6 +114,22 @@ func _build_hud() -> void:
 	xp_fill.offset_bottom = 4.0
 	xp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	xp_bg.add_child(xp_fill)
+
+	var super_bg := ColorRect.new()
+	super_bg.color = Color(1, 1, 1, 0.06)
+	super_bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	super_bg.anchor_right = 1.0
+	super_bg.offset_top = 5.0
+	super_bg.offset_bottom = 8.0
+	super_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(super_bg)
+	super_fill = ColorRect.new()
+	super_fill.color = Color(1.0, 0.84, 0.42)
+	super_fill.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	super_fill.offset_top = 5.0
+	super_fill.offset_bottom = 8.0
+	super_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	super_bg.add_child(super_fill)
 
 
 func _build_radar() -> void:
@@ -568,6 +585,13 @@ func poll(dt: float, main: Node) -> void:
 			hp_label.add_theme_color_override("font_color", hp_col)
 			var frac: float = clampf(float(run.xp) / maxf(run.xp_need, 1.0), 0.0, 1.0)
 			xp_fill.size.x = root.size.x * frac
+			var s_frac: float = clampf(float(run.get("super_meter", 0.0)) / 100.0, 0.0, 1.0)
+			super_fill.size.x = root.size.x * s_frac
+			if s_frac >= 1.0:
+				var pulse := 0.65 + 0.35 * sin(Time.get_ticks_msec() / 90.0)
+				super_fill.color.a = pulse
+			else:
+				super_fill.color.a = 1.0
 			var bits: Array = []
 			for w in main.loadout.weapons:
 				bits.append(main.LoadoutLib.weapon_label(w))
@@ -752,8 +776,9 @@ class RadarView extends Control:
 			var pos := _to_radar(rec.node.position.x, rec.node.position.z) * scale
 			if pos.length_squared() > (center.x - 4.0) * (center.x - 4.0):
 				continue
-			draw_rect(Rect2(center + pos - Vector2.ONE * (2.5 if rec.boss else 1.5), Vector2.ONE * (5.0 if rec.boss else 3.0)),
-				Color(0.94, 0.76, 0.29) if rec.boss else Color(1.0, 0.42, 0.29))
+			var elite: bool = rec.get("elite", false)
+			draw_rect(Rect2(center + pos - Vector2.ONE * (2.5 if elite else 1.5), Vector2.ONE * (5.0 if elite else 3.0)),
+				Color(0.94, 0.76, 0.29) if elite else Color(1.0, 0.42, 0.29))
 		var cols := {"patch": Color(0.49, 1.0, 0.69), "vac": Color(0.53, 0.83, 1.0), "flare": Color(1.0, 0.88, 0.54)}
 		for c in _caches:
 			if c.taken:

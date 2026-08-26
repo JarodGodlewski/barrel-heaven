@@ -12,6 +12,7 @@ const MAX_HP := 5
 const SECTOR_END := 600.0   # Mercy jumps at 10:00
 const BASE_XP_NEED := 6
 const XP_NEED_PER_LEVEL := 4
+const SUPER_MAX := 100.0
 
 var meta: Dictionary = {}
 var run: Dictionary = {}
@@ -48,9 +49,21 @@ func new_run() -> void:
 		"xp": 0,
 		"xp_need": BASE_XP_NEED,
 		"pending_levels": 0,
+		"super_meter": 0.0,
 		"won": false,
 	}
 	hull_changed.emit(run.hp, run.max_hp)
+
+
+func add_super(n: float) -> void:
+	run.super_meter = minf(SUPER_MAX, run.super_meter + n)
+
+
+func spend_super() -> bool:
+	if run.super_meter < SUPER_MAX:
+		return false
+	run.super_meter = 0.0
+	return true
 
 
 func add_xp(n: int) -> void:

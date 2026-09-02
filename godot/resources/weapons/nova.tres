@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/data/weapon_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "nova"
+display_name = "Nova Pulse"
+tag = "HARDPOINT"
+desc = "Shock the air around the ship."
+interval = 1.35
+evolve = "plating"
+evo_name = "Shock Halo"
+evo_desc = "A bigger bite. Hull sings."

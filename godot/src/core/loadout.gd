@@ -5,72 +5,10 @@ class_name Loadout
 const WEAPON_SLOTS := 4
 const PASSIVE_SLOTS := 4
 const WEAPON_MAX := 5
+const _Catalog := preload("res://src/data/catalog.gd")
 
-const WEAPONS: Dictionary[String, Dictionary] = {
-	"twin": {
-		"id": "twin", "name": "Twin Laser", "tag": "HARDPOINT",
-		"desc": "Paired cannons. Favors what's in front of you.",
-		"interval": 0.16, "evolve": "coolant",
-		"evo_name": "Storm Array", "evo_desc": "A wall of bolts. The Well goes white.",
-	},
-	"lock": {
-		"id": "lock", "name": "Lock-On", "tag": "HARDPOINT",
-		"desc": "Homing slugs. Hatch would approve of the computer.",
-		"interval": 0.42, "evolve": "targeting",
-		"evo_name": "Swarm Lock", "evo_desc": "Three seekers. They do not miss often.",
-	},
-	"bomb": {
-		"id": "bomb", "name": "Smart Charge", "tag": "HARDPOINT",
-		"desc": "Charges orbit the hull and chew whatever gets close.",
-		"interval": 1.1, "evolve": "gyro",
-		"evo_name": "Halo Charge", "evo_desc": "A ring that never stops.",
-	},
-	"nova": {
-		"id": "nova", "name": "Nova Pulse", "tag": "HARDPOINT",
-		"desc": "Shock the air around the ship.",
-		"interval": 1.35, "evolve": "plating",
-		"evo_name": "Shock Halo", "evo_desc": "A bigger bite. Hull sings.",
-	},
-	"scatter": {
-		"id": "scatter", "name": "Scatter Banks", "tag": "HARDPOINT",
-		"desc": "Side guns. Good when they come from everywhere.",
-		"interval": 0.38, "evolve": "afterburner",
-		"evo_name": "Crossfire", "evo_desc": "A fan of light. Nothing is a six anymore.",
-	},
-	"mines": {
-		"id": "mines", "name": "Mine Rack", "tag": "HARDPOINT",
-		"desc": "Drops mines in your wake.",
-		"interval": 0.85, "evolve": "scoop",
-		"evo_name": "Minefield", "evo_desc": "The trail behind you is a problem for them.",
-	},
-}
-
-const PASSIVES: Dictionary[String, Dictionary] = {
-	"coolant": {
-		"id": "coolant", "name": "Coolant Loop", "tag": "SYSTEM",
-		"desc": "Hardpoints cycle faster.", "stat": "cooldown", "per": 0.12,
-	},
-	"afterburner": {
-		"id": "afterburner", "name": "Afterburner", "tag": "SYSTEM",
-		"desc": "More speed. More of the map.", "stat": "speed", "per": 0.10,
-	},
-	"plating": {
-		"id": "plating", "name": "Hull Plating", "tag": "SYSTEM",
-		"desc": "+1 max hull and a patch.", "stat": "hp_bonus", "per": 1.0,
-	},
-	"scoop": {
-		"id": "scoop", "name": "Mote Scoop", "tag": "SYSTEM",
-		"desc": "Pull XP motes from farther out.", "stat": "magnet", "per": 0.22,
-	},
-	"gyro": {
-		"id": "gyro", "name": "Gyro Rig", "tag": "SYSTEM",
-		"desc": "Bolts and pulses hit a wider cone.", "stat": "area", "per": 0.14,
-	},
-	"targeting": {
-		"id": "targeting", "name": "Targeting Core", "tag": "SYSTEM",
-		"desc": "Everything hits harder.", "stat": "damage", "per": 0.18,
-	},
-}
+static var WEAPONS: Dictionary = _Catalog.weapons()
+static var PASSIVES: Dictionary = _Catalog.passives()
 
 
 static func empty_loadout() -> Dictionary[String, Variant]:

@@ -1,0 +1,30 @@
+default_model: grok-4.6
+default_provider: xai
+allowed_providers:
+  - xai
+  - ollama
+forbidden_providers:
+  - openrouter
+  - openai
+  - anthropic
+  - google
+  - gemini
+  - opencode-zen
+profiles:
+  think:
+    provider: xai
+    model: grok-4.6
+    reasoning_effort: high
+  ship:
+    provider: xai
+    model: grok-4.6
+    reasoning_effort: medium
+by_role:
+  creative-director:
+    profile: think
+  craft-researcher:
+    profile: think
+  engine-builder:
+    profile: ship
+  qa-oracle:
+    profile: ship

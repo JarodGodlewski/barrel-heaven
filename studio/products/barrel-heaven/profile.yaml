@@ -1,0 +1,21 @@
+id: barrel-heaven
+title: Barrel Heaven
+publisher: Birddog Softworks
+status: active
+engine: godot-4.7
+code_root: godot
+workspace: dir:/workspace/barrel-heaven
+board: barrel-heaven
+runtime: barrel-hermes
+studio_os: "2.1"
+max_workers: 2
+smokes:
+  - tools/Godot_v4.7-stable_win64_console.exe --headless --path . -- --smoke
+constitution: studio/CONSTITUTION.md
+world: docs/WORLD.md
+progression: docs/PROGRESSION.md
+architecture: docs/ARCHITECTURE.md
+refill_default: chair_seed
+notes: |
+  Island from LAD. Chair seeds the board; refill does not invent extraction work.
+  Feel on The Well. Meta after phase 4.

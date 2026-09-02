@@ -1,0 +1,26 @@
+# Barrel Heaven — inference policy
+# xAI primary, local Ollama fallback. Nothing else.
+
+default_model: grok-4.6
+default_provider: xai
+
+allowed_models:
+  - grok-4.6
+  - grok-4.5
+  - grok-4
+  - qwen3:32b
+  - qwen2.5:72b
+  - qwen2.5:32b
+  - llama3.1:latest
+
+allowed_providers:
+  - xai
+  - ollama
+
+forbidden_providers:
+  - openrouter
+  - openai
+  - anthropic
+  - google
+  - gemini
+  - opencode-zen

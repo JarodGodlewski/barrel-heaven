@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/data/enemy_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "turret"
+hp = 5.0
+speed = 5.0
+scale = 1.0
+gems = 2
+body = Color(0.32, 0.18, 0.58, 1)
+accent = Color(0.7, 0.42, 1, 1)
+unlock = 70.0
+weight = 4.0

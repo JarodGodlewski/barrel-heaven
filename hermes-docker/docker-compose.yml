@@ -1,0 +1,65 @@
+# Barrel Heaven — Hermes Agent Docker Studio
+# xAI primary, host Ollama fallback. No provider keys in this file.
+#
+#   $env:XAI_API_KEY = "..."
+#   docker compose -f hermes-docker/docker-compose.yml up -d
+
+name: barrel-heaven-studio
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: barrel-hermes
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - barrel-hermes-data:/opt/data:delegated
+      - barrel-hermes-state:/opt/data/sqlite-state:delegated
+      - C:/Workspace/barrel-heaven:/workspace/barrel-heaven
+    environment:
+      HERMES_HOME: /opt/data
+      GATEWAY_ALLOW_ALL_USERS: "true"
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: "0.0.0.0"
+      HERMES_DASHBOARD_PORT: "9119"
+      XAI_API_KEY: ${XAI_API_KEY}
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: barrel
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: heaven
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: barrel-heaven-studio-local-signing-key
+      TERMINAL_CWD: /workspace/barrel-heaven/godot
+      TERMINAL_ENV: local
+      HERMES_MODEL: grok-4.6
+      HERMES_MAX_PARALLEL: "2"
+      HERMES_REFILL_PAUSED: "0"
+      STUDIO_OS: "2.1"
+      STUDIO_PROJECT: "barrel-heaven"
+      STUDIO_PUBLISHER: "Birddog Softworks"
+      HERMES_KANBAN_BOARD: barrel-heaven
+      OLLAMA_HOST: http://host.docker.internal:11434
+    ports:
+      - "9119:9119"
+      - "8642:8642"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+    command: ["gateway", "run"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9119/ -o /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+networks:
+  default:
+    name: hermes-net
+    external: true
+
+volumes:
+  barrel-hermes-data:
+    name: barrel-hermes-data
+  barrel-hermes-state:
+    name: barrel-hermes-state

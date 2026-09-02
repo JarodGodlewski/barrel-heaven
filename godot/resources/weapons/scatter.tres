@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/data/weapon_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "scatter"
+display_name = "Scatter Banks"
+tag = "HARDPOINT"
+desc = "Side guns. Good when they come from everywhere."
+interval = 0.38
+evolve = "afterburner"
+evo_name = "Crossfire"
+evo_desc = "A fan of light. Nothing is a six anymore."

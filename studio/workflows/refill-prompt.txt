@@ -1,0 +1,17 @@
+Birddog Softworks — Barrel Heaven refill.
+
+READ: studio/CONSTITUTION.md, studio/products/barrel-heaven/profile.yaml, studio/workflows/seed-catalog.yaml.
+
+RULES:
+- Board slug barrel-heaven. Workspace /workspace/barrel-heaven.
+- Max 2 workers.
+- Do not seed LAD, Lanes, or CCGS tasks.
+- Do not seed extraction (Spawn/Enemy/…) unless Chair unblocks.
+- Idempotency keys required. Do not duplicate titles.
+- xAI grok-4.6 only (+ Ollama fallback).
+
+PRIORITY:
+1. Chair cards in seed-catalog.yaml (classics, writers room)
+2. Recovery of blocked BH tasks
+3. Smoke red (qa-oracle)
+4. Never invent hangar/Yolk/code while Chair is on feel

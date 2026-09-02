@@ -1,0 +1,10 @@
+{
+  "publisher": "Birddog Softworks",
+  "studio": "Birddog Softworks",
+  "game_id": "barrel-heaven",
+  "label": "Barrel Heaven",
+  "tab": {
+    "path": "/barrel-heaven-dashboard",
+    "icon": "ship"
+  }
+}

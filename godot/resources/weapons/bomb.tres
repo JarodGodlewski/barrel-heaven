@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/data/weapon_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "bomb"
+display_name = "Smart Charge"
+tag = "HARDPOINT"
+desc = "Charges orbit the hull and chew whatever gets close."
+interval = 1.1
+evolve = "gyro"
+evo_name = "Halo Charge"
+evo_desc = "A ring that never stops."

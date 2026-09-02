@@ -1,0 +1,80 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "xai/grok-4.6",
+  "small_model": "ollama/qwen2.5:32b",
+  "enabled_providers": ["xai", "ollama"],
+  "share": "disabled",
+  "instructions": ["AGENTS.md", "docs/ARCHITECTURE.md", "godot/README.md"],
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:11434/v1"
+      },
+      "models": {
+        "qwen3:32b": {
+          "name": "Qwen3 32B (local)",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": { "context": 40960, "output": 8192 }
+        },
+        "qwen2.5:72b": {
+          "name": "Qwen2.5 72B (local)",
+          "tool_call": true,
+          "limit": { "context": 32768, "output": 8192 }
+        },
+        "qwen2.5:32b": {
+          "name": "Qwen2.5 32B (local)",
+          "tool_call": true,
+          "limit": { "context": 32768, "output": 8192 }
+        },
+        "llama3.1:latest": {
+          "name": "Llama 3.1 8B (local)",
+          "tool_call": true,
+          "limit": { "context": 131072, "output": 4096 }
+        }
+      }
+    }
+  },
+  "agent": {
+    "build": {
+      "model": "xai/grok-4.6"
+    },
+    "plan": {
+      "model": "xai/grok-4.6"
+    },
+    "explore": {
+      "model": "ollama/qwen3:32b"
+    },
+    "general": {
+      "model": "xai/grok-4.6"
+    },
+    "title": {
+      "model": "ollama/qwen2.5:32b"
+    },
+    "summary": {
+      "model": "ollama/qwen2.5:32b"
+    },
+    "compaction": {
+      "model": "ollama/qwen2.5:32b"
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "*": "allow"
+    }
+  },
+  "mcp": {
+    "godot": {
+      "type": "local",
+      "command": ["C:\\Program Files\\nodejs\\npx.cmd", "-y", "@coding-solo/godot-mcp"],
+      "enabled": true,
+      "timeout": 60000,
+      "environment": {
+        "GODOT_PATH": "C:\\Workspace\\barrel-heaven\\godot\\tools\\Godot_v4.7-stable_win64_console.exe"
+      }
+    }
+  }
+}

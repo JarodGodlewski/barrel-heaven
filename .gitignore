@@ -1,0 +1,14 @@
+# Secrets
+**/.env
+hermes-docker/docker/.env
+hermes-docker/.env/
+hermes-docker/.env.example
+
+# Godot
+.godot/
+godot/tools/Godot_v*.exe
+godot/.godot/
+
+Thumbs.db
+Desktop.ini
+.DS_Store

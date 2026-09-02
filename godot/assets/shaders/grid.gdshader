@@ -3,8 +3,8 @@ render_mode unshaded, blend_mix, cull_back, depth_draw_never;
 
 // Barrel Heaven arena floor — procedural grid, replaces Three.js GridHelper.
 
-uniform vec3 u_line_major : source_color = vec3(0.07, 0.19, 0.23);
-uniform vec3 u_line_minor : source_color = vec3(0.04, 0.11, 0.14);
+uniform vec3 u_line_major : source_color = vec3(0.22, 0.16, 0.06);
+uniform vec3 u_line_minor : source_color = vec3(0.10, 0.08, 0.04);
 uniform float u_cell = 120.0;
 uniform float u_alpha : hint_range(0.0, 1.0) = 0.16;
 

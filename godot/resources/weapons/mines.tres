@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/data/weapon_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "mines"
+display_name = "Mine Rack"
+tag = "HARDPOINT"
+desc = "Drops mines in your wake."
+interval = 0.85
+evolve = "scoop"
+evo_name = "Minefield"
+evo_desc = "The trail behind you is a problem for them."

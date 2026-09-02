@@ -3,7 +3,7 @@ render_mode blend_add, unshaded, cull_disabled, depth_draw_never;
 
 // Barrel Heaven projectile bolt — soft additive glow, fresnel edge falloff.
 
-uniform vec4 u_core : source_color = vec4(0.78, 1.0, 0.94, 1.0);
+uniform vec4 u_core : source_color = vec4(1.0, 0.72, 0.18, 1.0);
 uniform float u_fade : hint_range(0.0, 1.0) = 1.0;
 uniform float u_intensity = 1.8;
 

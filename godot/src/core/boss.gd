@@ -166,13 +166,14 @@ func take_damage(kind: String, dmg: float) -> void:
 			arms_alive -= 1
 			var flash_pos: Vector3 = (p.node as Node3D).global_position
 			p.node.get_parent().remove_child(p.node)   # stop hit detection
+			EventBus.boss_part_destroyed.emit(kind, flash_pos)
 			main.spawn_flash(flash_pos, Color(1.0, 0.5, 0.1), 14.0)
 			main.shake_amt = maxf(main.shake_amt, 0.8)
 			main.sfx("bigexplode", -3.0)
 			main.sfx("slam", -8.0)
 			match kind:
 				"armL":
-					main.ui.say_once("armL-down", "juno", "Left arm's off! It's furious!", 3.4)
+					main.ui.say_once("armL-down", "hatch", "Left arm's off! It's furious!", 3.4)
 				"armR":
 					main.ui.say_once("armR-down", "hatch", "Other arm's gone! Core's exposed — light it up!")
 			if arms_alive <= 0:
@@ -180,7 +181,7 @@ func take_damage(kind: String, dmg: float) -> void:
 				var disc: StandardMaterial3D = parts["chest_disc_mat"]
 				disc.emission = Color(0.2, 1.0, 0.5)
 				disc.albedo_color = Color(0.2, 1.0, 0.5)
-				main.ui.say_once("core-open", "vicar", "Shield is down. Kill the core, Rook.")
+				main.ui.say_once("core-open", "pip", "Shield's down. Hit the chest, Rook.")
 				main.sfx("alarm", -5.0)
 
 
@@ -188,6 +189,7 @@ func die() -> void:
 	if dead:
 		return
 	dead = true
+	EventBus.boss_killed.emit(global_position)
 	main.spawn_flash(global_position + Vector3(0, 6, 0), Color(1.0, 0.85, 0.3), 40.0)
 	main.spawn_flash(global_position + Vector3(0, 12, 0), Color(1.0, 0.4, 0.1), 26.0)
 	main.shake_amt = 1.4

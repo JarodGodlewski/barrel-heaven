@@ -1,0 +1,26 @@
+project: barrel-heaven
+product: barrel-heaven
+publisher: Birddog Softworks
+workspace: dir:/workspace/barrel-heaven
+board: barrel-heaven
+max_workers: 2
+constitution: studio/CONSTITUTION.md
+
+seeds:
+  - {id: BH-CLASSICS, key: bh-classics-v1, title: "Classics cites → docs/research/CLASSICS.md"}
+  - {id: BH-WRITERS, key: bh-writers-v1, title: "Writer's room → docs/research/WRITERS_ROOM.md"}
+  - {id: BH-RADIO, key: bh-radio-bible-v1, title: "Radio bible → docs/research/RADIO_BIBLE.md"}
+  - {id: BH-ENDINGS, key: bh-endings-v1, title: "Ending A/B/C beat sheets → docs/research/ENDINGS.md"}
+  - {id: BH-VEIL, key: bh-veil-v1, title: "Veil cut list → docs/research/VEIL_CUTS.md"}
+  - {id: BH-FLOW, key: bh-level-flow-v1, title: "One-hole level flow → docs/research/LEVEL_FLOW.md"}
+  - {id: BH-SECRETS, key: bh-secrets-v1, title: "Secret verbs → forks → docs/research/SECRETS.md"}
+  - {id: BH-CLOCK, key: bh-string-clock-v1, title: "True-string length budget → docs/research/STRING_CLOCK.md"}
+  - {id: BH-STATS, key: bh-stats-door-v1, title: "Printed stats (VS twist) → docs/research/STATS_DOOR.md"}
+  - {id: BH-HANGAR, key: bh-hangar-yolk-v1, title: "Hangar / chits / Yolk → docs/research/HANGAR_YOLK.md"}
+  - {id: BH-UNLOCKS, key: bh-unlocks-v1, title: "Unlock table (verbs) → docs/research/UNLOCKS.md"}
+  - {id: BH-KITS, key: bh-kits-v1, title: "Kit trio stat sheet → docs/research/KITS.md"}
+
+do_not_seed:
+  - Phase 2 extract
+  - LAD
+  - lanes

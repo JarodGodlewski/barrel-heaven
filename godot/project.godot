@@ -23,6 +23,8 @@ Storage="*res://src/autoloads/Storage.gd"
 Settings="*res://src/autoloads/Settings.gd"
 AudioManager="*res://src/autoloads/AudioManager.gd"
 GameState="*res://src/autoloads/GameState.gd"
+EventBus="*res://src/autoloads/EventBus.gd"
+QaWatch="*res://src/autoloads/QaWatch.gd"
 
 [display]
 

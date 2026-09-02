@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/data/weapon_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "twin"
+display_name = "Twin Laser"
+tag = "HARDPOINT"
+desc = "Paired cannons. Favors what's in front of you."
+interval = 0.16
+evolve = "coolant"
+evo_name = "Storm Array"
+evo_desc = "A wall of bolts. The Well goes white."
